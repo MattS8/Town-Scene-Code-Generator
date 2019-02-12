@@ -15,6 +15,7 @@
 // Constants
 #define UP 1
 #define DOWN 0
+#define MAX_NUM_ROUTINES 20
 
 // Classes and structs for Town Scene Code Generator:
 
@@ -51,6 +52,7 @@ public:
 	HWND title;
 	HWND upButton;
 	HWND downButton;
+	HWND deleteButton;
 	Routine routine;
 };
 

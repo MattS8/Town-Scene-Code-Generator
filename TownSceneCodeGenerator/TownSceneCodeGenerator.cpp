@@ -23,29 +23,8 @@
 #define MOVE_ROUTINE_UP_END 168
 #define MOVE_ROUTINE_DOWN 125
 #define MOVE_ROUTINE_DOWN_END 145
-
-// d2 - D13 A0 - A5
-// Structs
-//class OnTime
-//{
-//public:
-//	std::string pin;
-//	std::string onTimes;
-//	unsigned int numberOfTimes;
-//
-//	OnTime() 
-//	{
-//		this->onTimes = "";
-//		this->numberOfTimes = 0;
-//	}
-//
-//	OnTime(std::string pin, std::string onTimes, unsigned int numberOfTimes)
-//	{
-//		this->pin = pin;
-//		this->onTimes = onTimes;
-//		this->numberOfTimes = numberOfTimes;
-//	}
-//};
+#define DELETE_ROUTINE 170
+#define DELET_ROUTINE_END 190
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
