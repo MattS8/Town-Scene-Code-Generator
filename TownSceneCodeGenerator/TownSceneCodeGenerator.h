@@ -53,6 +53,7 @@ public:
 	HWND upButton;
 	HWND downButton;
 	HWND deleteButton;
+	HWND editButton;
 	Routine routine;
 };
 

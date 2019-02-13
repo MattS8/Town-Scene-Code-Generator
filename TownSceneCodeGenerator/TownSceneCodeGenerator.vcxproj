@@ -167,6 +167,10 @@
     <ResourceCompile Include="TownSceneCodeGenerator.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\..\..\Downloads\DELETE_BMP.bmp" />
+    <Image Include="..\..\..\Downloads\DOWN_BMP.bmp" />
+    <Image Include="..\..\..\Downloads\EDIT_BMP.bmp" />
+    <Image Include="..\..\..\Downloads\UP_BMP.bmp" />
     <Image Include="small.ico" />
     <Image Include="TownSceneCodeGenerator.ico" />
   </ItemGroup>
