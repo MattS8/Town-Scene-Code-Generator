@@ -42,7 +42,7 @@ GenerationOptions Options;						// Code generation options
 
 // UI Variables:
 int RoutineHeight = 25;
-int RoutineWidth = 350;
+int RoutineWidth = 300;
 int RoutineBtnWidth = 50;
 int RoutineBtnHeight = 25;
 int width = 1300;
@@ -302,7 +302,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	std::map<std::string, Routine>::iterator it;
 	std::map<std::string, HWND>::iterator itHWND;
-	int i, x;
     switch (message)
     {
     case WM_COMMAND:
@@ -564,7 +563,7 @@ void AddControls(HWND handler)
 
 	hwdHandler = handler;
 	int cbHeight = 20;
-	int secondColumnStart = width / 4;
+	int secondColumnStart = width / 4 + RoutineWidth;
 	int reqFielsLen = 135;
 	int pinEditWidth = 35;
 	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + 30;
@@ -640,9 +639,10 @@ void DrawRoutineList()
 	RemoveRoutineWindows();
 
 	int i = 0;
+	int buttonPos = 0;
 	std::list<std::string>::iterator itter;
 	RoutineGUI* routineGUI;
-	for (itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end(); ++itter)
+	for (itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end(); ++itter, buttonPos = 0)
 	{
 		// Get routine corresponding to this current position in the list
 		routineGUI = &(Routines.find(*itter)->second);
@@ -655,10 +655,10 @@ void DrawRoutineList()
 
 		// Create windows for the routine name, and buttons to change the routine's position in the list
 		routineGUI->title = CreateWindowW(L"Static", wStr.c_str(), WS_VISIBLE | WS_CHILD, 5, 45 + (RoutineHeight * i) + (i * 5), RoutineWidth, RoutineHeight, hwdHandler, NULL, NULL, NULL);
-		routineGUI->upButton = CreateWindowW(L"Button", L"∧", WS_VISIBLE | WS_CHILD, RoutineWidth + 10, 45 + (RoutineHeight * i) + (i*5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
-		routineGUI->downButton = CreateWindowW(L"Button", L"∨", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + RoutineBtnWidth, 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
-		routineGUI->editButton = CreateWindowW(L"Button", L"e", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * 2), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(EDIT_ROUTINE + i - 1), NULL, NULL);
-		routineGUI->deleteButton = CreateWindowW(L"Button", L"X", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * 3), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
+		routineGUI->upButton = CreateWindowW(L"Button", L"∧", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i*5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
+		routineGUI->downButton = CreateWindowW(L"Button", L"∨", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
+		//routineGUI->editButton = CreateWindowW(L"Button", L"e", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(EDIT_ROUTINE + i - 1), NULL, NULL);
+		routineGUI->deleteButton = CreateWindowW(L"Button", L"X", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
 
 		//auto hwndEdit = LoadImage(hInst, MAKEINTRESOURCE(IDB_BITMAP1), IMAGE_BITMAP, 0, 0, LR_DEFAULTCOLOR);
 		//SendMessage(routineGUI->editButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM) hwndEdit);
