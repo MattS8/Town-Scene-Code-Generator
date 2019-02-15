@@ -24,6 +24,12 @@
 #define MAXCUES 1000            // 1000 cues should be enough ...
 #define DEFAULT_SAMPLERATE 44100
 
+#define MFS_FRM 1
+#define MFS_SEC 2
+#define MFS_MIN 3
+#define MFS_HRS 4
+#define MFS_SMP 5
+
 // Array for cues of the input WAV file
 
 struct CUEARRAY                 // ATTENTION: When expanding this structure, adjust SortCueArray ()!
@@ -37,8 +43,11 @@ struct CUEARRAY                 // ATTENTION: When expanding this structure, adj
 };
 
 // Forward declarations
-int CompareCueArrayElements(CUEARRAY* pElement1, CUEARRAY* pElement2);
-void SwapCueArrayElements(CUEARRAY* pElement1, CUEARRAY* pElement2);
+
+int					CompareCueArrayElements(CUEARRAY* pElement1, CUEARRAY* pElement2);
+void				SwapCueArrayElements(CUEARRAY* pElement1, CUEARRAY* pElement2);
+std::string			MakeFormatString(int nFormatStringType, bool bFractional);
+bool				CarryTimeString(std::string strTime, int nMaxValue);
 
 int nDataChunkSizeDiff;         // Difference in the size of the data chunks of the original
 								// Wav file opposite the WavPack file
@@ -50,6 +59,19 @@ int nFilePointerCueSubchunk;    // Shows behind the wave data
 int nMaxCues = MAXCUES;
 std::string strCueSheetCDTitle;
 
+// Format options
+
+int nFormatTimeLeadingDigitsHrs = 1;
+int nFormatTimeFractionalDigitsHrs = 10;
+int nFormatTimeLeadingDigitsMin = 1;
+int nFormatTimeFractionalDigitsMin = 4;
+int nFormatTimeLeadingDigitsSec = 2;
+int nFormatTimeFractionalDigitsSec = 3;
+int nFormatTimeLeadingDigitsFrm = 0;
+int nFormatTimeFractionalDigitsFrm = 1;
+int nFormatTimeLeadingDigitsSmp = 1;
+int nFormatTimeFractionalDigitsSmp = 0;
+
 // Information about the selected audio file
 
 std::string strAudioFileName;
@@ -59,8 +81,10 @@ int nAudioFileSamplesPerSec;
 WAVEFORMATEX WaveFmt;
 
 // Variables replacing TOpenDialog
+
 std::string fileName;
 
+//---------------------------------------------------------------------------
 
 // trim from end (in place)
 static inline void rtrim(std::string &s) {
@@ -131,7 +155,7 @@ int FindChunk(FILE *fp, LPMMCKINFO pChunk, LPMMCKINFO pParentChunk)
 	do
 	{
 		if (nBytesReadSoFar + nBytesToRead > nBytesMax) return -1;
-		int nBytesRead = fread(pChunk, 1, nBytesToRead, fp);
+		size_t nBytesRead = fread(pChunk, 1, nBytesToRead, fp);
 		if (nBytesRead != nBytesToRead) return -1;
 		if ((pChunk->ckid & 0xff) == 0)     // 1. Byte = Padbyte?
 		{
@@ -589,50 +613,6 @@ bool VerifyCueIndex(int iCue)
 
 //---------------------------------------------------------------------------
 
-int CueSheetTimeStringToFrames(std::string strTimeString)
-{
-	int nFrames = -1;
-	std::string strTemp(strTimeString);
-
-	strTemp.replace(strTemp.begin(), strTemp.end(), ':', ' ');
-
-	char *szMin = new char[strTemp.length() + 1];
-	char *szSec = new char[strTemp.length() + 1];
-	char *szFrm = new char[strTemp.length() + 1];
-
-	int nAnzahl = sscanf_s(strTemp.c_str(), "%s %s %s", szMin, strTemp.length() + 1, szSec, strTemp.length() + 1, szFrm, strTemp.length() + 1);
-
-	int nMin = 0, nSec = 0, nFrm = 0;
-
-	do
-	{
-		if (nAnzahl >= 3)
-		{
-			try { nMin = std::stoi(szMin); }
-			catch (...) { break; }
-		}
-		if (nAnzahl >= 2)
-		{
-			try { nSec = std::stoi(szSec); }
-			catch (...) { break; }
-		}
-		if (nAnzahl >= 1)
-		{
-			try { nFrm = std::stoi(szFrm); }
-			catch (...) { break; }
-		}
-		nFrames = nFrm + nSec * 75 + nMin * 60 * 75;
-	} while (false);
-
-	delete[] szMin;
-	delete[] szSec;
-	delete[] szFrm;
-
-	return nFrames;
-}
-
-//---------------------------------------------------------------------------
-
 void SwapCueArrayElements(CUEARRAY* pElement1, CUEARRAY* pElement2)
 {
 	CUEARRAY tmpCueArrayElement;
@@ -668,303 +648,314 @@ int CompareCueArrayElements(CUEARRAY* pElement1, CUEARRAY* pElement2)
 	return strElement1.compare(strElement2);
 }
 
-
-
 //---------------------------------------------------------------------------
 
-void LoadCueSheet(std::string strFileName)
+// Creates a string of chars 'c' with length 'len'
+std::string StringOfChar(char c, int len)
 {
-	fileName = strFileName;
-	/*if (strFileName == "") if (!OpenDialogCueSheet->Execute()) return;*/
+	std::string strRet = "";
 
-	//// Should discard changes?
-	//if (!DiscardChanges()) return;
-
-	int nSampleRateCues = DEFAULT_SAMPLERATE;
-
-	// Open cue sheet for reading
-
-	FILE *fp;
-	errno_t err = fopen_s(&fp, strFileName.c_str(), "rb");
-	if (err != 0)
+	for (int i = 0; i < len; i++)
 	{
-		std::string strTemp = "Can't open Cue Sheet '"; strTemp.append(fileName).append("' for reading.");
-		OutputLogStr.append(strTemp).append("/r/n");
-		return;
+		strRet.push_back(c);
 	}
 
-	// Cue-Sheet zeilenweise lesen und parsen
-
-	std::string strLine, strToken, strTemp;
-	std::string strCDFileName, strCDPerformer, strCDTitle;
-	int iCue = 0, nLine = 0, nErrorLine = 0, nLastTrackCue = -1;
-	bool bTrackExists = false, bFileExists = false;
-	int nSamplesFile = 0, nSamplesRateFile = 0;
-	bool bFileDataOK = false;
-	unsigned int nOffsetSamples = 0;
-
-	char szLine[256];
-	while (fgets(szLine, sizeof(szLine), fp) != NULL)
-	{
-		nLine++;
-
-		RemoveNewLine(szLine);
-		strLine = szLine;
-		strLine = trim(strLine);
-		std::transform(strLine.begin(), strLine.end(), strLine.begin(), ::toupper);
-
-		// TRACK: New Track
-		strToken = "TRACK";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			if (bTrackExists)  // If tracks already exist, then index to the next track!
-			{
-				if (!CueExists(iCue)) iCue++;  // Avoid duplicates
-			}
-
-			if (!VerifyCueIndex(iCue))
-			{
-				iCue--;
-				break;
-			}
-
-			// Neue Cue initialisieren
-			CueArray[iCue].StartSample = 0;
-			CueArray[iCue].nSamples = 0;
-			CueArray[iCue].Label = "Track ";
-			CueArray[iCue].Label.append(std::to_string(iCue+1));   // Track-Title
-			CueArray[iCue].Description = strCDPerformer;                                 // Track-Performer
-			CueArray[iCue].Type = "trak";
-
-			bTrackExists = true;
-			continue;
-		}
-
-		// PERFORMER: wenn noch kein TRACK, dann merken als "CD Performer", sonst merken als "Track Performer"
-		strToken = "PERFORMER";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			strTemp = strLine.substr(strToken.length() + 1, strLine.length() - strToken.length());
-			strTemp.replace(strLine.begin(), strLine.end(), ':', ' ');
-			if (bTrackExists)
-				CueArray[iCue].Description = strTemp;
-			else
-				strCDPerformer = strTemp;
-			continue;
-		}
-
-		// TITLE: if no TRACK, then remember "CD Title", otherwise noted as "Track Title"
-		strToken = "TITLE";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			strTemp = strLine.substr(strToken.length() + 1, strLine.length() - strToken.length());
-			strTemp.replace(strLine.begin(), strLine.end(), '\"', ' ');
-			if (bTrackExists)
-				CueArray[iCue].Label = strTemp;
-			else
-				strCDTitle = strTemp;
-			continue;
-		}
-
-		// FILE
-		strToken = "FILE";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			int nPos1 = strLine.find("\"");
-			if (nPos1 == 0 || nPos1 == strLine.length())
-			{
-				nErrorLine = nLine;
-				break;
-			}
-			nPos1++;
-			int nPos2 = strLine.substr(nPos1, strLine.length() - nPos1 + 1).find("\"");
-			if (nPos2 == 0)
-			{
-				nErrorLine = nLine;
-				break;
-			}
-			nPos2--;
-			strTemp = strLine.substr(nPos1, nPos2);
-			if (bFileExists)
-			{
-				if (bFileDataOK)
-				{
-					// Länge der letzten Datei zum Offset für die folgenden Zeitangaben addieren
-					nOffsetSamples += ((unsigned int)nSamplesFile * nSampleRateCues) / nSamplesRateFile; //Unknown if changing hyper to unsigned int is correct...
-					bFileDataOK = GetWavFileData(strTemp, nSamplesFile, nSamplesRateFile);
-				}
-				if (!bFileDataOK)
-				{
-					OutputLogStr.append("Cue Sheet must not contain more than 1 audio file, or all audio files must exist and be readable and valid!").append("\r\n");
-					nErrorLine = -1;
-					break;
-				}
-			}
-			else
-			{
-				strCDFileName = strTemp;
-				bFileExists = true;
-				bFileDataOK = GetWavFileData(strTemp, nSamplesFile, nSamplesRateFile);
-				if (bFileDataOK) nSampleRateCues = nSamplesRateFile;
-			}
-			continue;
-		}
-
-		// INDEX 01: Neue Track-Cue
-		strToken = "INDEX 01";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			strTemp = trim(strLine.substr(strToken.length() + 1, strLine.length() - strToken.length()));
-			int nFrames = CueSheetTimeStringToFrames(strTemp);
-			if (nFrames == -1)
-			{
-				nErrorLine = nLine;
-				break;
-			}
-			CueArray[iCue].StartSample = (int)(nOffsetSamples + (unsigned int)nFrames * nSampleRateCues / 75); // possible rounding error! //Unknown if changing hyper to unsigned int is correct...
-
-			// Anzahl Samples des letzten Track-Indexes berechnen
-			if (nLastTrackCue != -1) CueArray[nLastTrackCue].nSamples = CueArray[iCue].StartSample - CueArray[nLastTrackCue].StartSample;
-			nLastTrackCue = iCue;
-			continue;
-		}
-
-		// INDEX 00: Neue Index-Cue
-		strToken = "INDEX 00";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			strTemp = trim(strLine.substr(strToken.length() + 1, strLine.length() - strToken.length()));
-			int nFrames = CueSheetTimeStringToFrames(strTemp);
-			if (nFrames == -1)
-			{
-				nErrorLine = nLine;
-				break;
-			}
-
-			if (!CueExists(iCue)) iCue++;  // Avoid duplicates
-
-			if (!VerifyCueIndex(iCue))
-			{
-				iCue--;
-				break;
-			}
-
-			// Move the last cue back one to make room for the index cue
-			CueArray[iCue].StartSample = CueArray[iCue - 1].StartSample;
-			CueArray[iCue].nSamples = CueArray[iCue - 1].nSamples;
-			CueArray[iCue].Label = CueArray[iCue - 1].Label;
-			CueArray[iCue].Description = CueArray[iCue - 1].Description;
-			CueArray[iCue].Type = CueArray[iCue - 1].Type;
-
-			// Neue Cue initialisieren
-			CueArray[iCue - 1].StartSample = (int)(nOffsetSamples + (unsigned int)nFrames * nSampleRateCues / 75); // possible rounding error! //Unknown if changing hyper to unsigned int is correct...
-			CueArray[iCue - 1].nSamples = 0;
-			CueArray[iCue - 1].Label = "Track index";
-			CueArray[iCue - 1].Description = "";
-			CueArray[iCue - 1].Type = "indx";
-			continue;
-		}
-
-		// INDEX 02...n: Neue Index-Cue
-		strToken = "INDEX";
-		if (strLine.substr(1, strToken.length()).compare(strToken) == 0)
-		{
-			strTemp = trim(strLine.substr(strToken.length() + 3 + 1, strLine.length() - strToken.length() - 3));
-			int nFrames = CueSheetTimeStringToFrames(strTemp);
-			if (nFrames == -1)
-			{
-				nErrorLine = nLine;
-				break;
-			}
-
-			if (!CueExists(iCue)) iCue++;  // Avoid duplicates
-
-			if (!VerifyCueIndex(iCue))
-			{
-				iCue--;
-				break;
-			}
-
-			// Neue Cue initialisieren
-			CueArray[iCue].StartSample = (int)(nOffsetSamples + (unsigned int)nFrames * nSampleRateCues / 75); // possible rounding error! //Unknown if changing hyper to unsigned int is correct...
-			CueArray[iCue].nSamples = 0;
-			CueArray[iCue].Label = "Track index";
-			CueArray[iCue].Description = "";
-			CueArray[iCue].Type = "indx";
-			continue;
-		}
-	}
-	fclose(fp);
-
-	if (nErrorLine == 0)
-	{
-		if (bTrackExists)
-		{
-			if (bFileDataOK)
-			{
-				// Add the length of the last file to the offset for the following times
-				nOffsetSamples += ((unsigned int)nSamplesFile * nSampleRateCues) / nSamplesRateFile; //Unknown if changing hyper to unsigned int is correct...
-
-				// Calculate the number of samples of the last track index
-				// CueArray [iCue].nSamples = (int) nOffsetSamples - CueArray [iCue].StartSample; <- bug!
-				if (nLastTrackCue != -1) CueArray[nLastTrackCue].nSamples = (int)nOffsetSamples - CueArray[nLastTrackCue].StartSample;
-
-			}
-			else
-			{
-				// Reset all sample lengths to 0, since without audio file the length of the last track
-				// can not be calculated (if already track lengths, then for all tracks!)
-				for (int i = 0; i <= iCue; i++)    // (iCue still points to the last cue in the array)
-					CueArray[i].nSamples = 0;
-			}
-
-			// Correction: Index + 1 = number of cues
-			if (!CueExists(iCue)) iCue++; // Avoid duplicates
-
-			nCueListSamplesPerSec = nSampleRateCues;
-		}
-		//strCueSheetCDFileName = fileName;
-		//SetCDPerformerAndTitleFromCDFileName();
-		//if (!strCDFileName.IsEmpty()) strCueSheetCDFileName = strCDFileName;
-		//if (!strCDPerformer.IsEmpty()) strCueSheetCDPerformer = strCDPerformer;
-		strCueSheetCDTitle = !strCDTitle.empty() ? strCDTitle : "TODO_TITLE"; //TODO: generate title for file?
-	}
-	else
-	{
-		if (nErrorLine != -1)
-		{
-			OutputLogStr.append("Syntax error in line ").append(std::to_string(nErrorLine)).append(" of Cue Sheet\n'").append(fileName).append("'!").append("\r\n");
-		}
-		iCue = 0;
-	}
-
-	nCues = iCue;
-	SortCueArray();
-	OutputLogStr.append(std::to_string(nCues)).append(" Cues have been loaded from '").append(fileName).append("'").append("\r\n");
+	return strRet;
 }
 
 //---------------------------------------------------------------------------
 
-void SelectAudioFile(std::string strFileName)
+std::string FormatTime(double fSec)
 {
-	if (strFileName != "")
-		fileName = strFileName;
-	else
-		return;
+	std::string strResult;
+	std::string strHrs, strMin, strSec, strFrm, strSmp;
 
-	strAudioFileName = fileName;
-	bAudioFileIsValid = GetWavFileData(strAudioFileName, nAudioFileSamples, nAudioFileSamplesPerSec);
+	// Calculate the possible values
+	double fHrsTotal = fSec / 3600;
+	double fMinTotal = fSec / 60;
+	double fSecTotal = fSec;
+	double fFrmTotal = fSec * 75;
+	double fSmpTotal = fSec * (bAudioFileIsValid ? nAudioFileSamplesPerSec : nCueListSamplesPerSec);
+
+	double fMinWithoutHrs = fMinTotal - (int)fHrsTotal * 60;
+	double fSecWithoutMin = fSecTotal - (int)fMinTotal * 60;
+	double fSecWithoutHrs = fSecTotal - (int)fHrsTotal * 3600;
+	double fFrmWithoutSec = fFrmTotal - (int)fSecTotal * 75;
+	double fFrmWithoutMin = fFrmTotal - (int)fMinTotal * 60 * 75;
+	double fFrmWithoutHrs = fFrmTotal - (int)fHrsTotal * 3600 * 75;
+
+	// Determine which placeholders exist
+	strResult = "%m:%s";
+	bool bHrsExist = (strResult.find("%h") != std::string::npos || strResult.find("%H") != std::string::npos);
+	bool bMinExist = (strResult.find("%m") != std::string::npos || strResult.find("%M") != std::string::npos);
+	bool bSecExist = (strResult.find("%s") != std::string::npos || strResult.find("%S") != std::string::npos);
+	bool bFrmExist = (strResult.find("%f") != std::string::npos || strResult.find("%F") != std::string::npos);
+	bool bSmpExist = (strResult.find("%p") != std::string::npos || strResult.find("%P") != std::string::npos);
+
+	// Note the carry, which may be created by rounding up with sprintf ().
+	// Then increase the higher-ranking position accordingly.
+	bool bCarry = false;
+
+	// Used to keep using sprintf format
+	char tempFrames[100];
+	char tempSeconds[100];
+	char tempMinutes[100];
+	char tempHours[100];
+	char tempSamples[100];
+
+	// Frames
+	if (bFrmExist)
+	{
+		// Frames with seconds. Output number of decimal places
+		if (bSecExist)
+		{
+			// Send two-digit frames minus seconds
+			sprintf_s(tempFrames, sizeof(tempFrames), MakeFormatString(MFS_FRM, true).c_str(), fFrmWithoutSec);
+			//strFrm.sprintf_s(MakeFormatString(MFS_FRM, true), fFrmWithoutSec);
+			bCarry = CarryTimeString(strFrm, 75);
+		}
+		else if (bMinExist)
+		{
+			// Send two-digit frames minus minutes
+			sprintf_s(tempFrames, sizeof(tempFrames), MakeFormatString(MFS_FRM, true).c_str(), fFrmWithoutMin);
+			//strFrm.sprintf_s(MakeFormatString(MFS_FRM, true), fFrmWithoutMin);
+			bCarry = CarryTimeString(strFrm, 60 * 75);
+		}
+		else if (bHrsExist)
+		{
+			// Send two-digit frames minus hours
+			sprintf_s(tempFrames, sizeof(tempFrames), MakeFormatString(MFS_FRM, true).c_str(), fFrmWithoutHrs);
+			//strFrm.sprintf_s(MakeFormatString(MFS_FRM, true), fFrmWithoutHrs);
+			bCarry = CarryTimeString(strFrm, 60 * 60 * 75);
+		}
+		else
+		{
+			// Output leading zeros
+			sprintf_s(tempFrames, sizeof(tempFrames), MakeFormatString(MFS_FRM, true).c_str(), fFrmTotal);
+			//strFrm.sprintf_s(MakeFormatString(MFS_FRM, true), fFrmTotal);
+		}
+		strFrm = std::string(tempFrames);
+	}
+
+	// Seconds
+	if (bSecExist)
+	{
+		// Consider carryover
+		if (bCarry) fSecTotal++, fSecWithoutMin++, fSecWithoutHrs++, bCarry = false;
+
+		if (bFrmExist)
+		{
+			// Send seconds without decimal places
+			if (bMinExist)
+			{
+				// Send two digits minus the minutes
+				sprintf_s(tempSeconds, sizeof(tempSeconds), MakeFormatString(MFS_SEC, false).c_str(), (int)fSecWithoutMin);
+				//strSec.sprintf_s(MakeFormatString(MFS_SEC, false), (int)fSecWithoutMin);
+				bCarry = CarryTimeString(strSec, 60);
+			}
+			else if (bHrsExist)
+			{
+				// Send two-digit seconds minus the hours
+				sprintf_s(tempSeconds, sizeof(tempSeconds), MakeFormatString(MFS_SEC, false).c_str(), (int)fSecWithoutHrs);
+				//strSec.sprintf_s(MakeFormatString(MFS_SEC, false), (int)fSecWithoutHrs);
+				bCarry = CarryTimeString(strSec, 60 * 60);
+			}
+			else
+			{
+				// Output leading zeros
+				sprintf_s(tempSeconds, sizeof(tempSeconds), MakeFormatString(MFS_SEC, false).c_str(), (int)fSecTotal);
+				//strSec.sprintf_s(MakeFormatString(MFS_SEC, false), (int)fSecTotal);
+			}
+		}
+		else
+		{
+			// Send seconds with decimal places
+			if (bMinExist)
+			{
+				// Send two digits minus the minutes
+				sprintf_s(tempSeconds, sizeof(tempSeconds), MakeFormatString(MFS_SEC, true).c_str(), fSecWithoutMin);
+				//strSec.sprintf_s(MakeFormatString(MFS_SEC, true), fSecWithoutMin);
+				bCarry = CarryTimeString(strSec, 60);
+			}
+			else if (bHrsExist)
+			{
+				// Send two-digit seconds minus the hours
+				sprintf_s(tempSeconds, sizeof(tempSeconds), MakeFormatString(MFS_SEC, true).c_str(), fSecWithoutHrs);
+				//strSec.sprintf_s(MakeFormatString(MFS_SEC, true), fSecWithoutHrs);
+				bCarry = CarryTimeString(strSec, 60 * 60);
+			}
+			else
+			{
+				// Output number of leading zeros
+				sprintf_s(tempSeconds, sizeof(tempSeconds), MakeFormatString(MFS_SEC, true).c_str(), fSecTotal);
+				//strSec.sprintf_s(MakeFormatString(MFS_SEC, true), fSecTotal);
+			}
+		}
+		strSec = std::string(tempSeconds);
+	}
+
+	// Minutes
+	if (bMinExist)
+	{
+		// Consider carryover
+		if (bCarry) fMinTotal++, fMinWithoutHrs++, bCarry = false;
+
+		if (bSecExist || bFrmExist)
+		{
+			// Send minutes without decimal places
+			if (bHrsExist)
+			{
+				// Send two-digit minutes minus hours
+				sprintf_s(tempMinutes, sizeof(tempMinutes), MakeFormatString(MFS_SEC, false).c_str(), (int)fMinWithoutHrs);
+				//strMin.sprintf_s(MakeFormatString(MFS_MIN, false), (int)fMinWithoutHrs);
+				bCarry = CarryTimeString(strMin, 60);
+			}
+			else
+			{
+				// Output leading zeros
+				sprintf_s(tempMinutes, sizeof(tempMinutes), MakeFormatString(MFS_SEC, false).c_str(), (int)fMinTotal);
+				//strMin.sprintf_s(MakeFormatString(MFS_MIN, false), (int)fMinTotal);
+			}
+		}
+		else
+		{
+			//Send minutes with decimal places
+			if (bHrsExist)
+			{
+				// Send two-digit minutes minus hours
+				sprintf_s(tempMinutes, sizeof(tempMinutes), MakeFormatString(MFS_MIN, true).c_str(), fMinWithoutHrs);
+				//strMin.sprintf_s(MakeFormatString(MFS_MIN, true), fMinWithoutHrs);
+				bCarry = CarryTimeString(strMin, 60);
+			}
+			else
+			{
+				// Output number of leading zeros
+				sprintf_s(tempMinutes, sizeof(tempMinutes), MakeFormatString(MFS_MIN, true).c_str(), fMinTotal);
+				//strMin.sprintf_s(MakeFormatString(MFS_MIN, true), fMinTotal);
+			}
+		}
+		strMin = std::string(tempMinutes);
+	}
+
+	// Hours
+	if (bHrsExist)
+	{
+		// Consider carryover
+		if (bCarry) fHrsTotal++;     // (no further evaluation of the carry flag)
+
+		if (bMinExist || bSecExist || bFrmExist)
+		{
+			// Hours with (?angeg bad translation). Number of leading zeros, but without decimal places
+			sprintf_s(tempHours, sizeof(tempHours), MakeFormatString(MFS_HRS, false).c_str(), (int)fHrsTotal);
+			//strHrs.sprintf_s(MakeFormatString(MFS_HRS, false), (int)fHrsTotal);
+		}
+		else
+		{
+			// Hours with (?angeg bad translation). Output number of leading zeros and decimal places
+			sprintf_s(tempHours, sizeof(tempHours), MakeFormatString(MFS_HRS, true).c_str(), fHrsTotal);
+			//strHrs.sprintf(MakeFormatString(MFS_HRS, true), fHrsTotal);
+		}
+		strHrs = std::string(tempHours);
+	}
+
+	// Samples
+	if (bSmpExist)
+	{
+		// Samples with (?angeg bad translation). Output number of leading zeros
+		sprintf_s(tempSamples, sizeof(tempSamples), MakeFormatString(MFS_SMP, true).c_str(), fSmpTotal);
+		//strSmp.sprintf_s(MakeFormatString(MFS_SMP, true), fSmpTotal);
+		strSmp = std::string(tempSamples);
+	}
+
+	// Replace wildcards with determined strings
+	findAndReplaceAll(strResult, "%h", strHrs);	//strResult = StringReplace(strResult, "%h", strHrs, TReplaceFlags() << rfReplaceAll << rfIgnoreCase);
+	findAndReplaceAll(strResult, "%m", strMin);	//strResult = StringReplace(strResult, "%m", strMin, TReplaceFlags() << rfReplaceAll << rfIgnoreCase);
+	findAndReplaceAll(strResult, "%s", strSec);	//strResult = StringReplace(strResult, "%s", strSec, TReplaceFlags() << rfReplaceAll << rfIgnoreCase);
+	findAndReplaceAll(strResult, "%f", strFrm);	//strResult = StringReplace(strResult, "%f", strFrm, TReplaceFlags() << rfReplaceAll << rfIgnoreCase);
+	findAndReplaceAll(strResult, "%p", strSmp);	//strResult = StringReplace(strResult, "%p", strSmp, TReplaceFlags() << rfReplaceAll << rfIgnoreCase);
+
+	return strResult;
+}
+
+//---------------------------------------------------------------------------
+
+std::string MakeFormatString(int nFormatStringType, bool bFractional)
+{
+	char tempResult[100];
+	int nLeadingDigits, nFractionalDigits;
+
+	switch (nFormatStringType)
+	{
+	case MFS_HRS:
+		nLeadingDigits = nFormatTimeLeadingDigitsHrs;
+		nFractionalDigits = nFormatTimeFractionalDigitsHrs;
+		break;
+	case MFS_MIN:
+		nLeadingDigits = nFormatTimeLeadingDigitsMin;
+		nFractionalDigits = nFormatTimeFractionalDigitsMin;
+		break;
+	case MFS_SEC:
+		nLeadingDigits = nFormatTimeLeadingDigitsSec;
+		nFractionalDigits = nFormatTimeFractionalDigitsSec;
+		break;
+	case MFS_FRM:
+		nLeadingDigits = nFormatTimeLeadingDigitsFrm;
+		nFractionalDigits = nFormatTimeFractionalDigitsFrm;
+		break;
+	case MFS_SMP:
+		nLeadingDigits = nFormatTimeLeadingDigitsSmp;
+		nFractionalDigits = nFormatTimeFractionalDigitsSmp;
+		break;
+	}
+
+	if (bFractional)
+	{
+		if (nFractionalDigits == 0)
+		{
+			sprintf_s(tempResult, sizeof(tempResult), "%%0%d.0Lf", nLeadingDigits);
+			//strResult.sprintf("%%0%d.0Lf", nLeadingDigits);
+		}
+		else
+		{
+			sprintf_s(tempResult, sizeof(tempResult), "%%0%d.%dLf", nLeadingDigits + 1 + nFractionalDigits, nFractionalDigits);
+			//strResult.sprintf("%%0%d.%dLf", nLeadingDigits + 1 + nFractionalDigits, nFractionalDigits);
+		}
+	}
+	else
+	{
+		sprintf_s(tempResult, sizeof(tempResult), "%%0%dd", nLeadingDigits);
+		//strResult.sprintf("%%0%dd", nLeadingDigits);
+	}
+
+	return std::string(tempResult);
+}
+
+//---------------------------------------------------------------------------
+
+bool CarryTimeString(std::string strTime, int nMaxValue)
+{
+	int nPosDot = strTime.find_first_of(".");
+	std::string strTimeIntValue = (nPosDot == std::string::npos ? strTime : strTime.substr(1, nPosDot - 1));
+	std::string strTimeFracValue = (nPosDot == std::string::npos ? std::string("") : strTime.substr(nPosDot, strTime.length() - (nPosDot - 1)));
+	int nTimeIntValue;
+	try { nTimeIntValue = std::stoi(strTimeIntValue); }
+	catch (...) { return false; }
+	if (nTimeIntValue < nMaxValue) return false;
+	strTimeIntValue = StringOfChar('0', strTimeIntValue.length());
+	strTime = strTimeIntValue + strTimeFracValue;
+	return true;
 }
 
 //---------------------------------------------------------------------------  Custom String Formatter
 
-std::string FormatTimeCustom(long float fSec)
+std::string FormatTimeCustom(double fSec)
 {
-	long float fHrsTotal = fSec / 3600;
-	long float fMinTotal = fSec / 60;
-	long float fSecTotal = fSec;
+	double fHrsTotal = fSec / 3600;
+	double fMinTotal = fSec / 60;
+	double fSecTotal = fSec;
+	int remainderMin = (int) fSec % 3600;
 
-	int fMinWithoutHrs = round(fMinTotal - (int)fHrsTotal * 60);
+	int fMinWithoutHrs = round(fMinTotal - fHrsTotal * 60);
 	int fSecWithoutMin = round(fSecTotal - (int)fMinTotal * 60);
 	int fMilisWithoutSec = round(((fSecTotal - (int)fMinTotal * 60) - fSecWithoutMin) * 1000);
 
@@ -1014,15 +1005,22 @@ std::string GetCueInfo()
 	std::string strCue, strBegin, strEnd, strLength, strLabel, strNote, strFileName;
 	strFileName = ExtractFileNameCustom(fileName);
 	outputString << "File: " << strFileName << "\r\n";
+	long float dBegin, dEnd, dDuration;
 	for (int iCue = 0; iCue < nCues; iCue++)
 	{
+		dBegin = (CueArray[iCue].StartSample / nCueListSamplesPerSec);
+		dEnd = ((CueArray[iCue].StartSample + CueArray[iCue].nSamples) / nCueListSamplesPerSec);
+		dDuration = (CueArray[iCue].nSamples / nCueListSamplesPerSec);
+
+		//OutputLogStr.append("- Begin time = ").append(std::to_string(dBegin)).append(" | End time = ").append(std::to_string(dEnd)).append("\r\n");
+
 		strCue = std::to_string(iCue + 1);
-		strBegin = FormatTimeCustom((long float)CueArray[iCue].StartSample / nCueListSamplesPerSec);
-		strEnd = FormatTimeCustom((long float)(CueArray[iCue].StartSample + CueArray[iCue].nSamples) / nCueListSamplesPerSec);
-		strLength = FormatTimeCustom((long float)CueArray[iCue].nSamples / nCueListSamplesPerSec);
+		strBegin = FormatTime((long float)CueArray[iCue].StartSample / nCueListSamplesPerSec);
+		strEnd = FormatTime((long float)(CueArray[iCue].StartSample + CueArray[iCue].nSamples) / nCueListSamplesPerSec);
+		strLength = FormatTime((long float)CueArray[iCue].nSamples / nCueListSamplesPerSec);
 		strLabel = CueArray[iCue].Label;
 		strNote = CueArray[iCue].Description;
-
+		//OutputLogStr.append("\t").append(std::to_string(GetTimeMillis(strBegin))).append(" | ").append(std::to_string(GetTimeMillis(strEnd))).append("\r\n");
 		outputString << strCue << ") " << "Basic: " << strBegin << " - " << (CueArray[iCue].nSamples > 0 ? strEnd : "") << " " << strLabel << strNote << " (" << (CueArray[iCue].nSamples > 0 ? strLength : "") << ")\n";
 	}
 

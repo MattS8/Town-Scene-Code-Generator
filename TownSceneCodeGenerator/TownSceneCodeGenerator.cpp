@@ -716,7 +716,7 @@ void ParseWavFile(std::string newFileName)
 	fileName = newFileName;
 	ReadCueListFromAudioFile(fileName);
 	std::string strCueInfo = GetCueInfo();
-	std::string strRoutineName = ExtractFileNameCustom(fileName); strRoutineName = trim(strRoutineName.substr(0, strRoutineName.find(".wav")));
+	std::string strRoutineName = ExtractFileNameCustom(fileName); strRoutineName = TrimAllWhitespace(strRoutineName.substr(0, strRoutineName.find(".wav")));
 
 	// Check for duplicate routine names
 	std::map<std::string, RoutineGUI>::iterator it;
@@ -779,18 +779,18 @@ void ParseRoutineInput(std::string input, std::string routineName)
 		//  i.e. 1) Basic: 1:23:333 - 1:43.000 Gazebo D8 (0:23.333)
 		if (ifsLine >> word && ifsLine >> word && word.compare("Basic:") == 0)
 		{
-			// Get start time
+			// Get start time string. Convert to millis if using format mm:ss.mmm
 			ifsLine >> word;
-			time1 = GetTimeMillis(word);
+			time1 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
 
 			// Skip '-'
 			ifsLine >> word; 
 			
-			// Get end time
+			// Get end time string
 			ifsLine >> word;
-			time2 = GetTimeMillis(word);
+			time2 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
 
-			// Get routine name
+			// Get routine name string
 			ifsLine >> name;
 
 			// Check for existing light

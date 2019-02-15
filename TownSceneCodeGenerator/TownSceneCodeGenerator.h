@@ -12,6 +12,11 @@
 #include <regex>
 #include <ShellAPI.h>
 
+// For TrimAllWhitespace
+#include <algorithm> 
+#include <cctype>
+#include <locale>
+
 // Constants
 #define UP 1
 #define DOWN 0
@@ -175,6 +180,57 @@ bool IsValidVarName(std::string strFileName)
 	std::regex reg("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
 	return std::regex_match(strFileName, reg);
+}
+
+//---------------------------------------------------------------------------
+
+std::string TrimAllWhitespace(std::string str)
+{
+	size_t pos = str.find_first_of(" ");
+
+	while (pos != std::string::npos)
+	{
+		str = str.substr(pos == 0 ? 1 : 0, pos == 0 ? 1 : pos-1).append(str.substr(pos+1, str.length()));
+	}
+
+
+	// trim trailing spaces
+	size_t endpos = str.find_last_not_of(" \t");
+	size_t startpos = str.find_first_not_of(" \t");
+	if (std::string::npos != endpos)
+	{
+		str = str.substr(0, endpos + 1);
+		str = str.substr(startpos);
+	}
+	else {
+		str.erase(std::remove(std::begin(str), std::end(str), ' '), std::end(str));
+	}
+
+	// trim leading spaces
+	startpos = str.find_first_not_of(" \t");
+	if (std::string::npos != startpos)
+	{
+		str = str.substr(startpos);
+	}
+
+	return str;
+}
+
+//---------------------------------------------------------------------------
+
+void findAndReplaceAll(std::string & data, std::string toSearch, std::string replaceStr)
+{
+	// Get the first occurrence
+	size_t pos = data.find(toSearch);
+
+	// Repeat till end is reached
+	while (pos != std::string::npos)
+	{
+		// Replace this occurrence of Sub String
+		data.replace(pos, toSearch.size(), replaceStr);
+		// Get the next occurrence from the current position
+		pos = data.find(toSearch, pos + replaceStr.size());
+	}
 }
 
 #endif
