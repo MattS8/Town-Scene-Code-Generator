@@ -946,26 +946,6 @@ bool CarryTimeString(std::string strTime, int nMaxValue)
 	return true;
 }
 
-//---------------------------------------------------------------------------  Custom String Formatter
-
-std::string FormatTimeCustom(double fSec)
-{
-	double fHrsTotal = fSec / 3600;
-	double fMinTotal = fSec / 60;
-	double fSecTotal = fSec;
-	int remainderMin = (int) fSec % 3600;
-
-	int fMinWithoutHrs = round(fMinTotal - fHrsTotal * 60);
-	int fSecWithoutMin = round(fSecTotal - (int)fMinTotal * 60);
-	int fMilisWithoutSec = round(((fSecTotal - (int)fMinTotal * 60) - fSecWithoutMin) * 1000);
-
-	std::string strRet = "";
-
-	return strRet.append(std::to_string(fMinWithoutHrs)).append(":")
-		.append(fSecWithoutMin < 10 ? "0" : "").append(std::to_string(fSecWithoutMin)).append(".")
-		.append(fMilisWithoutSec < 100 ? "0" : "").append(fMilisWithoutSec < 10 ? "0" : "").append(std::to_string(fMilisWithoutSec));
-}
-
 //---------------------------------------------------------------------------
 
 std::string CueTypeToString(std::string strCueType)
@@ -1039,9 +1019,9 @@ void PrintCueInfo()
 	for (int iCue = 0; iCue < nCues; iCue++)
 	{
 		strCue = std::to_string(iCue + 1);
-		strBegin = FormatTimeCustom((long float)CueArray[iCue].StartSample / nCueListSamplesPerSec);
-		strEnd = FormatTimeCustom((long float) (CueArray[iCue].StartSample + CueArray[iCue].nSamples) / nCueListSamplesPerSec);
-		strLength = FormatTimeCustom((long float) CueArray[iCue].nSamples / nCueListSamplesPerSec);
+		strBegin = FormatTime((long float)CueArray[iCue].StartSample / nCueListSamplesPerSec);
+		strEnd = FormatTime((long float) (CueArray[iCue].StartSample + CueArray[iCue].nSamples) / nCueListSamplesPerSec);
+		strLength = FormatTime((long float) CueArray[iCue].nSamples / nCueListSamplesPerSec);
 		strLabel = CueArray[iCue].Label;
 		strNote = CueArray[iCue].Description;
 

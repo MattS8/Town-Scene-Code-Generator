@@ -42,7 +42,7 @@ GenerationOptions Options;						// Code generation options
 
 // UI Variables:
 int RoutineHeight = 25;
-int RoutineWidth = 300;
+int RoutineWidth = 600;
 int RoutineBtnWidth = 50;
 int RoutineBtnHeight = 25;
 int width = 1300;
