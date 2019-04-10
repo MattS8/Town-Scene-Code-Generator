@@ -54,15 +54,6 @@
     <Image Include="TownSceneCodeGenerator.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="..\..\..\Downloads\EDIT_BMP.bmp">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="..\..\..\Downloads\DELETE_BMP.bmp">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="..\..\..\Downloads\DOWN_BMP.bmp">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="..\..\..\Downloads\UP_BMP.bmp">
       <Filter>Resource Files</Filter>
     </Image>

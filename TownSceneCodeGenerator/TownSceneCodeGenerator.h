@@ -105,6 +105,14 @@ public:
 std::string OutputLogStr;
 std::map<std::string, RoutineGUI> Routines;
 
+//--------------------------------------------------------------------------- Debug Functions
+
+void PrintToOutputLog(std::string statement)
+{
+	std::wstring outputStr(statement.begin(), statement.end());
+	OutputDebugStringW(outputStr.c_str());
+}
+
 // Helper Functions
 
 //---------------------------------------------------------------------------
@@ -186,11 +194,27 @@ bool IsValidVarName(std::string strFileName)
 
 std::string TrimAllWhitespace(std::string str)
 {
-	size_t pos = str.find_first_of(" ");
+	size_t pos = str.find_first_of(" \t");
 
 	while (pos != std::string::npos)
 	{
-		str = str.substr(pos == 0 ? 1 : 0, pos == 0 ? 1 : pos-1).append(str.substr(pos+1, str.length()));
+		if (pos == 0)
+		{
+			if (str.length() < 2)
+				break;
+			str = str.substr(1, str.length());
+		}
+		else if (pos == str.length())
+		{
+			if (pos - 1 < 0)
+				break;
+			str = str.substr(0, str.length() - 1);
+		}
+		else
+		{
+			str = str.substr(0, pos).append(str.substr(pos + 1, str.length()));
+		}
+		pos = str.find_first_of(" \t");
 	}
 
 
