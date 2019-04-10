@@ -88,6 +88,7 @@ public:
 	bool bPrettyPrint = false;									// Should generated code be properly spaced and easier to read?
 	bool bAddDebugStatements = false;							// #Defines DEBUG in generated code, causing Arduino to print out some helpful debug statements
 	bool bRandomizeRoutineOrder = false;						// Should the generated code randomize the routine that's played every loop?
+	bool bSwapOnOffValues = false;								// Should a "turn light on" command write LOW instead of HIGH?
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player

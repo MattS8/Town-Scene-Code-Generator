@@ -16,6 +16,7 @@
 #define CLEAR_ROUTINES 8
 #define ADD_DEBUG_STATEMENTS 9
 #define USE_LIGHT 10
+#define SWAP_ONOFF 11
 #define SELECT_ALL 75
 #define RANDOMIZE_ORDER 78
 #define COPY_CODE 76
@@ -57,6 +58,7 @@ HWND hRandomizeRoutineOrder;
 HWND hOutputLog;
 HWND hMP3VolPin;
 HWND hTrainLeftPin;
+HWND hSwapOnOffValues;
 
 
 HWND hcbA[6];
@@ -330,6 +332,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.bAddDebugStatements = !Options.bAddDebugStatements;
 				CheckDlgButton(hWnd, ADD_DEBUG_STATEMENTS, Options.bAddDebugStatements ? BST_CHECKED : BST_UNCHECKED);
 				break;
+			case SWAP_ONOFF:
+				Options.bSwapOnOffValues = !Options.bSwapOnOffValues;
+				CheckDlgButton(hWnd, SWAP_ONOFF, Options.bSwapOnOffValues ? BST_CHECKED : BST_UNCHECKED);
+				break;
 			case CREATE_ROUTINE:
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_ADDROUTINE), hWnd, AddRoutine);
 				break;
@@ -572,6 +578,7 @@ void AddControls(HWND handler)
 	hPrettyPrintBox = CreateWindowW(L"Button", L"Pretty Print", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart, 35, 100, 30, handler, (HMENU)PRETTY_PRINT, NULL, NULL);
 	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110, 35, 175, 30, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
 	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175, 35, 205, 30, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);
+	hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175 + 200, 35, 175, 30, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
 	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
 	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
 	CreateWindowW(L"Static", L"Required Fields: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150, reqFielsLen, 20, handler, NULL, NULL, NULL);
@@ -879,7 +886,7 @@ std::string GenerateCode()
 	int i;
 
 	// Constants and #Defines 
-	outputString << "#define ulong unsigned long\r\n#define ON 1\r\n#define OFF 0\r\n#define P_ALL_OFF -1\r\n#define P_ALL_ON -2\r\n";
+	outputString << "#define ulong unsigned long\r\n#define ON " << (Options.bSwapOnOffValues ? 0 : 1) << "\r\n#define OFF " << (Options.bSwapOnOffValues ? 1 : 0) <<"\r\n#define P_ALL_OFF -1\r\n#define P_ALL_ON -2\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "#define PMotionSense " << Options.motionSensorPin << "\r\n";
 	outputString << "#define MP3SkipPin " << Options.mp3SkipPin << "\r\n";
