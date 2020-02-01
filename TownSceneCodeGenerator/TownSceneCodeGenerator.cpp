@@ -16,7 +16,7 @@
 #define CLEAR_ROUTINES 8
 #define ADD_DEBUG_STATEMENTS 9
 #define USE_LIGHT 10
-#define SWAP_ONOFF 11
+#define SWAP_ONOFF 3
 #define SELECT_ALL 75
 #define RANDOMIZE_ORDER 78
 #define COPY_CODE 76
@@ -1047,7 +1047,7 @@ std::string GenerateCode()
 	outputString << "void loop()\r\n{\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "\twhile (analogRead(PMotionSense) < 500) ;\r\n";
-	outputString << "	CurrentRoutine = SkipToRoutine();\r\n	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? ON : OFF);\r\n		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= routines[CurrentRoutine]->RoutineTime);\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = routines[CurrentRoutine]->RoutineTime;\r\n}\r\n";
+	outputString << "	CurrentRoutine = SkipToRoutine();\r\n	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= routines[CurrentRoutine]->RoutineTime);\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = routines[CurrentRoutine]->RoutineTime;\r\n}\r\n";
 	outputString << extraLine;
 
 	return outputString.str();
