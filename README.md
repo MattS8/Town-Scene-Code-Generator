@@ -1,5 +1,5 @@
 # Town Scene Code Generator
-This application automatically generates Arduino code for a Town Scene project. It works by parsing `.wav` files, looking for cue markers with specially formatted tags to create "routines". These routines are used to generate code which will tell the Arduino how and when to cycle through the songs on an MP3 player as well as when to turn light pins on and off.
+This application automatically generates Arduino code for a Town Scene project. It works by parsing `.wav` files, looking for cue markers with specially formatted tags, and creating "routines" to control town scenes. These routines are used to generate code which will tell the Arduino how and when to cycle through the songs on an MP3 player as well as when to turn light pins on and off.
 
 ## Hardware Used
 This program was created for use with an **Arduino Nano**. It may work for other Arduino devices, however your mileage may vary. It can also interface with any MP3 player that supports file transfer via the Windows file explorer.
