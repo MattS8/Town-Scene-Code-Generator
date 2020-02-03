@@ -16,7 +16,7 @@ Second, check all the boxes next to pins used to control the lights in each hous
 The program reads cue markers from `.wav` files in order to determine when to turn light pins on and off. This means that you can mixdown multiple songs into one big audio file (called a *routine*). 
 
 #### Adding Cue Markers
-Add cue markers where ever you want to turn a light on, and set the duration to whenever you want those lights to turn off. For example, if you add cue markers to the beginning of each song and make the cue span the duration equal of each respective song, you will effectively get lights that turn on and off with each and every song.
+Add cue markers wherever you want to turn a light on and set the duration to whenever you want the light to turn off. For example, if you add cue markers to the beginning of each song and make the cues span the duration of the respective songs, you will effectively get lights that turn on and off with each and every song.
 
 #### Cue Marker Naming Convention
 Cue marker names must follow a strict naming convention in order for the program to understand which lights must be turned on and off. 
