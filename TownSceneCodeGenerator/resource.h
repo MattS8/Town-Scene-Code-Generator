@@ -34,6 +34,8 @@
 #define IDCOPYCODE                      1010
 #define IDC_LIGHTS_ON_AT_END            1011
 #define IDC_VIEW_CODE                   1012
+#define IDC_VIEW_CODE2                  1013
+#define IDC_WRITE_ARDUINO               1013
 #define ID_HELP_INTRUSCTIONS            32771
 #define IDM_INSTRTUCTIONS               32772
 #define IDC_STATIC                      -1

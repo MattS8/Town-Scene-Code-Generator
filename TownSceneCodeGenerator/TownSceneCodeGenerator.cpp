@@ -10,6 +10,10 @@
 
 #define MAX_LOADSTRING 100
 
+#define WRITE_TO_ARDUINO 2001
+#define UPLOAD_CODE 2002
+#define UPLOAD_TO_MP3 2003
+
 #define PRETTY_PRINT 5
 #define GENERATE_CODE 4
 #define CREATE_ROUTINE 7
@@ -43,13 +47,14 @@ GenerationOptions Options;						// Code generation options
 
 // UI Variables:
 int RoutineHeight = 25;
-int RoutineWidth = 600;
+int RoutineWidth = 100;
 int RoutineBtnWidth = 50;
 int RoutineBtnHeight = 25;
 int width = 1300;
 int height = 1300;
 int RequiredFieldHeight = 150;
 
+HWND hMP3DriveLetter;
 HWND hMP3Pin;
 HWND hMotionSensorPin;
 HWND hPrettyPrintBox;
@@ -74,7 +79,7 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	AddRoutine(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK	GenerateCodeCB(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-void				ParseRoutineInput(std::string input, std::string name);
+void				ParseRoutineInput(std::string input, std::string name, std::string fileName);
 void				ParseWavFile(std::string name);
 void				ParseFiles(HDROP wParam);
 void				CheckSelectedPin(int wmId, HWND hWnd);
@@ -180,6 +185,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
       return FALSE;
    }
 
+   RECT rect;
+   if (GetWindowRect(hWnd, &rect))
+   {
+	   width = rect.right - rect.left;
+	   RoutineWidth = width / 2 - (RoutineBtnWidth*3) - 10;
+   }
+
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
@@ -234,6 +246,152 @@ void DeleteRoutine(int wmId)
 
 	// Update the GUI
 	DrawRoutineList();
+}
+
+bool CopySongToMp3Player(std::string mp3FilePath, std::string fileName)
+{
+	// Get Source File Path
+	size_t mp3SourcePathSize = strlen(mp3FilePath.c_str()) + 1;
+	wchar_t* wMp3SourcePath = new wchar_t[mp3SourcePathSize];
+	size_t outSize;
+	mbstowcs_s(&outSize, wMp3SourcePath, mp3SourcePathSize, mp3FilePath.c_str(), mp3SourcePathSize - 1);
+
+	// Get Destination File Path
+	std::string destPath = "";
+	destPath.append(Options.mp3DriveLetter).append(":\\").append(fileName).append(".mp3");
+	size_t mp3DestinationPathSize = strlen(destPath.c_str()) + 1;
+	wchar_t* wMp3DestinationPath = new wchar_t[mp3DestinationPathSize];
+	mbstowcs_s(&outSize, wMp3DestinationPath, mp3DestinationPathSize, destPath.c_str(), mp3DestinationPathSize - 1);
+
+	// Attempt to Copy File to MP3
+	bool bErrorFlag = CopyFile((LPCWSTR)wMp3SourcePath, (LPCWSTR) wMp3DestinationPath, false);
+	delete wMp3SourcePath;
+	if (bErrorFlag == FALSE) {
+		std::ostringstream os;
+		os << "> Error: Unable to copy over " << fileName << " (Error Code: " << GetLastError() << ")\r\n";
+		OutputLogStr.append(os.str());
+		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+void WriteCodeToArduino(bool uploadDirectly)
+{
+	std::string code;
+	code = GenerateCode();
+
+	SECURITY_ATTRIBUTES SA = { 0 };
+	SA.nLength = sizeof(SECURITY_ATTRIBUTES);
+	SA.bInheritHandle = TRUE;
+
+	std::wstring wsTempDirectoryPath = L"C:\\temp\\TownSceneCodeGenerator\\";
+
+	if (Options.mp3DriveLetter.size() == 0) {
+		OutputLogStr.append("> Warning: No MP3 drive letter was given. Files will not be uploaded to the MP3 player.\r\n");
+		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+	}
+
+	std::map<std::string, RoutineGUI>::iterator it = Routines.begin();
+	while (it != Routines.end()) {
+		std::string mp3FilePath = it->second.routine.wavFilePath.substr(0, it->second.routine.wavFilePath.size() - 3);
+		mp3FilePath.append("mp3");
+		//OutputLogStr.append("MP3 file path: ").append(mp3FilePath).append("\r\n");
+		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+
+	
+		if (Options.mp3DriveLetter.size() > 0) {
+			bool success = CopySongToMp3Player(mp3FilePath, it->second.routine.name);
+			if (!success)
+				return;
+		}
+
+		it++;
+	}
+	
+
+	// Create Directory
+	bool bErrorFlag = CreateDirectoryW(wsTempDirectoryPath.c_str(), &SA);
+
+	//ERROR
+	if (bErrorFlag == FALSE && GetLastError() != ERROR_ALREADY_EXISTS) {
+		DWORD dwError = GetLastError();
+		if (dwError == ERROR_PATH_NOT_FOUND) {
+			OutputLogStr.append("> Error: Unable to create temporary directory for .ino file. (Path Not Found)\n");
+			SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+			return;
+		}
+		else if (dwError != ERROR_ALREADY_EXISTS) {
+			std::ostringstream os;
+			os << "> Error: Unable to create temporary directory for .ino file. (UNKNOWN ERROR: " << dwError << ")\r\n";
+			OutputLogStr.append(os.str());
+			SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+			return;
+		}
+	}
+
+	DeleteFile(L"C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino");
+	// Create File
+	HANDLE hFileOut = ::CreateFile(L"C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino", GENERIC_WRITE,
+		FILE_SHARE_WRITE,
+		&SA,
+		OPEN_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL);
+
+	// ERROR
+	if (hFileOut == INVALID_HANDLE_VALUE) {
+		OutputLogStr.append("> Error: Unable to create temporary .ino file.\r\n");
+		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		return;
+	}
+
+	// Write to File
+	const char* csCode = code.c_str();
+	DWORD dwBytesWritten = 0;
+	DWORD dwBytesToWrite = (DWORD)strlen(csCode);
+	bErrorFlag = WriteFile(
+		hFileOut,
+		&csCode[0],
+		dwBytesToWrite,
+		&dwBytesWritten,
+		NULL
+	);
+	::CloseHandle(hFileOut);
+
+	//ERROR
+	if (bErrorFlag == FALSE) {
+		OutputLogStr.append("> Error: Unable to write to temporary .ino file.\r\n");
+		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		return;
+	}
+	//ERROR
+	else if (dwBytesToWrite != dwBytesWritten) {
+		OutputLogStr.append("> Error: Synchronous write to temporary .ino file failed.\r\n");
+		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		return;
+	}
+	//SUCCESS
+	else {
+		STARTUPINFO      SI = { 0 };
+		PROCESS_INFORMATION PI = { 0 };
+		SI.cb = sizeof(STARTUPINFO);
+		SI.dwFlags = STARTF_USESTDHANDLES;
+		SI.hStdOutput = hFileOut;
+
+		const std::wstring command = uploadDirectly 
+			? L"arduino_debug --upload C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino"
+			: L"arduino C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino";
+
+		::CreateProcess(0, (LPWSTR)command.c_str(), NULL, NULL, TRUE, CREATE_DEFAULT_ERROR_MODE, NULL, NULL, &SI, &PI);
+
+		OutputLogStr.append("> Successfully sent code to Arduino.\r\n");
+		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		::CloseHandle(PI.hThread);
+		::CloseHandle(PI.hProcess);
+		
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -341,7 +499,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				break;
 			case CLEAR_ROUTINES:
 				RemoveRoutineWindows();
-				OutputLogStr.append(" Cleared all routines from list.\r\n");
+				OutputLogStr.append("> Cleared all routines from list.\r\n");
 				SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 				Routines = std::map<std::string, RoutineGUI>();
 				OrderTracker.routineNames.clear();
@@ -351,13 +509,40 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.motionSensorPin = GetStringFromWindow(hMotionSensorPin);
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
+				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				if (RequiredFieldsFilled())
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_VIEWCODE), hWnd, GenerateCodeCB);
 				else
 					SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 				break;
+			case WRITE_TO_ARDUINO:
+				Options.mp3SkipPin = GetStringFromWindow(hMP3Pin);
+				Options.motionSensorPin = GetStringFromWindow(hMotionSensorPin);
+				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
+				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
+				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
+				if (RequiredFieldsFilled())
+					WriteCodeToArduino(FALSE);
+				else
+					SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+				break;
+			case UPLOAD_CODE:
+				Options.mp3SkipPin = GetStringFromWindow(hMP3Pin);
+				Options.motionSensorPin = GetStringFromWindow(hMotionSensorPin);
+				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
+				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
+				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
+				if (RequiredFieldsFilled())
+					WriteCodeToArduino(TRUE);
+				else
+					SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+				break;
 			case SELECT_ALL:
 				SelectAll(!AllSelected(), hWnd);
+				break;
+			case UPLOAD_TO_MP3:
+				Options.bUploadToMp3 = !Options.bUploadToMp3;
+				CheckDlgButton(hWnd, wmId, Options.bUploadToMp3 ? BST_CHECKED : BST_UNCHECKED);
 				break;
             default:
 				if		(wmId >= USE_LIGHT && wmId <= USE_LIGHT + 18)					CheckSelectedPin(wmId, hWnd);
@@ -497,7 +682,7 @@ INT_PTR CALLBACK AddRoutine(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 					// Check for valid variable name
 					if (!IsValidVarName(name))
 					{
-						OutputLogStr.append("Warning: Filename '").append(name).append("' cannot be used as a variable name. Renaming to '");
+						OutputLogStr.append("> Warning: Filename '").append(name).append("' cannot be used as a variable name. Renaming to '");
 						name = GenerateRoutineName();
 						OutputLogStr.append(name).append("' instead.").append("\r\n");
 					}
@@ -507,14 +692,14 @@ INT_PTR CALLBACK AddRoutine(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 				}
 
 				// Get routine from cue sheet data
-				ParseRoutineInput(input, name);
+				ParseRoutineInput(input, name, "");
 
 				// Update GUI
 				DrawRoutineList();
 				SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 			}
 			else {
-				OutputLogStr.append(" Warning: No input found. Make sure you pasted the routine data into the dialog box that appears when you click \"Add Routine\"\r\n");
+				OutputLogStr.append("> Warning: No input found. Make sure you pasted the routine data into the dialog box that appears when you click \"Add Routine\"\r\n");
 				SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 			}
 
@@ -537,7 +722,7 @@ bool RequiredFieldsFilled()
 	// Need at least one routine
 	if (Routines.size() == 0) 
 	{
-		OutputLogStr.append(" Error: Nothing to show. Please add routines and try again.\r\n");
+		OutputLogStr.append("> Error: Nothing to show. Please add routines and try again.\r\n");
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
 	}
@@ -545,7 +730,7 @@ bool RequiredFieldsFilled()
 	// Need pin number of the MP3 player
 	if (Options.mp3SkipPin.size() == 0)
 	{
-		OutputLogStr.append(" Error: No pins declared for the MP3 Player.\r\n");
+		OutputLogStr.append("> Error: No pins declared for the MP3 Player.\r\n");
 		bRequiredFieldsFilled = false;
 	}
 
@@ -565,16 +750,19 @@ void AddControls(HWND handler)
 	{
 		width = rect.right - rect.left;
 		height = rect.bottom - rect.top;
+		RoutineWidth = width / 2 - (RoutineBtnWidth * 3) - 50;
 	}
 
 	hwdHandler = handler;
 	int cbHeight = 20;
-	int secondColumnStart = width / 4 + RoutineWidth;
-	int reqFielsLen = 135;
+	int secondColumnStart = RoutineWidth + (RoutineBtnWidth*3) + 75;
+	int reqFielsLen = 125;
 	int pinEditWidth = 35;
 	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + 30;
-	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, 7, width / 2 - 25, 45 + 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 7, secondColumnStart - 25, 20, handler, NULL, NULL, NULL);
+	int directUploadOptionsYPos = 150 + 55 + 70;
+	//CreateWindowW(L"Static", L"", WS_VISIBLE | WS_CHILD, 5, 7, width, 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, 7, secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 7, 175, 20, handler, NULL, NULL, NULL);
 	hPrettyPrintBox = CreateWindowW(L"Button", L"Pretty Print", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart, 35, 100, 30, handler, (HMENU)PRETTY_PRINT, NULL, NULL);
 	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110, 35, 175, 30, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
 	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175, 35, 205, 30, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);
@@ -584,36 +772,111 @@ void AddControls(HWND handler)
 	CreateWindowW(L"Static", L"Required Fields: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150, reqFielsLen, 20, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, 150, 125, 20, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, 150, 150, 20, handler, (HMENU)SELECT_ALL, NULL, NULL);
+	CreateWindowW(L"Static", L"Direct Upload Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos, reqFielsLen + 30, 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"MP3 Drive Letter: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos + 30, 140, 20, handler, NULL, NULL, NULL);
+	hMP3DriveLetter = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, directUploadOptionsYPos + 30, pinEditWidth, 20, handler,
+		NULL, NULL, NULL);
 	for (i = 0; i < 6; i++)
 	{
 		std::wostringstream os2;
 		os2 << "A" << i;
-		hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX, thirdColumnStart + 70, 150 + cbHeight + (cbHeight * i), 47, 20, handler, (HMENU)(USE_LIGHT + i), NULL, NULL);
+		hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX, 
+			thirdColumnStart + 70, 
+			150 + cbHeight + (cbHeight * i), 
+			47, 
+			20, 
+			handler, (HMENU)(USE_LIGHT + i), NULL, NULL);
 	}
 	for (i = 0; i < 12; i++)
 	{
 		std::wostringstream os;
 		os << "D" << (i + 2);
-		hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX, thirdColumnStart, 150 + cbHeight + (cbHeight * i), 47, 20, handler, (HMENU)(USE_LIGHT + 7+i), NULL, NULL);
+		hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX, 
+			thirdColumnStart, 
+			150 + cbHeight + (cbHeight * i), 
+			47, 
+			20, 
+			handler, (HMENU)(USE_LIGHT + 7+i), NULL, NULL);
 	}
-	CreateWindowW(L"Static", L"MP3 Skip Pin: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150 + 30, 95, 20, handler, NULL, NULL, NULL);
-	hMP3Pin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, 150 + 30, pinEditWidth, 20, handler,
-		NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Motion Sensor Pin: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 75, 140, 20, handler, NULL, NULL, NULL);
-	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, 75, pinEditWidth, 20, handler,
-		NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Train Pin: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 100, 140, 20, handler, NULL, NULL, NULL);
-	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, 100, pinEditWidth, 20, handler,
-		NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"MP3 Volume Pin: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150 + 55, 140, 20, handler, NULL, NULL, NULL);
-	hMP3VolPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, 150 + 55, pinEditWidth, 20, handler,
-		NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"MP3 Skip Pin: ", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart, 
+		150 + 30, 
+		95, 
+		20, 
+		handler, NULL, NULL, NULL);
+	hMP3Pin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
+		secondColumnStart + reqFielsLen, 
+		150 + 30, 
+		pinEditWidth, 
+		20, 
+		handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Motion Sensor Pin: ", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart, 
+		75, 
+		140, 
+		20, 
+		handler, NULL, NULL, NULL);
+	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
+		secondColumnStart + reqFielsLen, 
+		75, 
+		pinEditWidth, 
+		20,
+		handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Train Pin: ", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart, 
+		100, 
+		140, 
+		20, 
+		handler, NULL, NULL, NULL);
+	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
+		secondColumnStart + reqFielsLen, 
+		100, 
+		pinEditWidth, 
+		20, 
+		handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"MP3 Volume Pin: ", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart, 
+		150 + 55, 
+		140, 
+		20, 
+		handler, NULL, NULL, NULL);
+	hMP3VolPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
+		secondColumnStart + reqFielsLen, 
+		150 + 55, 
+		pinEditWidth, 
+		20, 
+		handler, NULL, NULL, NULL);
 
 	int bottomStart = 150 + cbHeight + (cbHeight * i) + 25;
-	CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, secondColumnStart + ((thirdColumnStart + 90 - secondColumnStart) / 2), bottomStart, 200, 35, handler, (HMENU)GENERATE_CODE, NULL, NULL);
-	CreateWindowW(L"Static", L"Output Log: ", WS_VISIBLE | WS_CHILD, secondColumnStart, bottomStart + 45, secondColumnStart - 25, 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2), 
+		bottomStart, 
+		200, 
+		35, 
+		handler, (HMENU)GENERATE_CODE, NULL, NULL);
+	CreateWindowW(L"Button", L"Send Code to Arduino", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2) + 210, 
+		bottomStart, 
+		200, 
+		35, 
+		handler, (HMENU)WRITE_TO_ARDUINO, NULL, NULL);
+	CreateWindowW(L"Button", L"Upload Code Directly", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2) + 210 + 210,
+		bottomStart, 
+		150, 35, 
+		handler, (HMENU)UPLOAD_CODE, NULL, NULL);
+	CreateWindowW(L"Static", L"Output Log: ", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart, 
+		bottomStart + 45, 
+		secondColumnStart - 25, 
+		20, 
+		handler, NULL, NULL, NULL);
 	hOutputLog = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL | ES_WANTRETURN | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_MULTILINE | ES_READONLY,
-		secondColumnStart, bottomStart + 65, (secondColumnStart)-25, height - (bottomStart + 65), handler, NULL, NULL, NULL);
+		secondColumnStart, 
+		bottomStart + 65, 
+		(secondColumnStart)-25, 
+		height - (bottomStart + 65),
+		handler, NULL, NULL, NULL);
 }
 
 //---------------------------------------------------------------------------
@@ -661,11 +924,30 @@ void DrawRoutineList()
 		std::wstring wStr = std::wstring(tempStr.begin(), tempStr.end());
 
 		// Create windows for the routine name, and buttons to change the routine's position in the list
-		routineGUI->title = CreateWindowW(L"Static", wStr.c_str(), WS_VISIBLE | WS_CHILD, 5, 45 + (RoutineHeight * i) + (i * 5), RoutineWidth, RoutineHeight, hwdHandler, NULL, NULL, NULL);
-		routineGUI->upButton = CreateWindowW(L"Button", L"∧", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i*5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
-		routineGUI->downButton = CreateWindowW(L"Button", L"∨", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
+		routineGUI->title = CreateWindowW(L"Static", wStr.c_str(), WS_VISIBLE | WS_CHILD, 
+			5, 
+			45 + (RoutineHeight * i) + (i * 5), 
+			RoutineWidth, 
+			RoutineHeight, 
+			hwdHandler, NULL, NULL, NULL);
+		routineGUI->upButton = CreateWindowW(L"Button", L"∧", WS_VISIBLE | WS_CHILD, 
+			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
+			45 + (RoutineHeight * i) + (i*5), 
+			RoutineBtnWidth, 
+			RoutineBtnHeight, 
+			hwdHandler, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
+		routineGUI->downButton = CreateWindowW(L"Button", L"∨", WS_VISIBLE | WS_CHILD, 
+			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
+			45 + (RoutineHeight * i) + (i * 5), 
+			RoutineBtnWidth, RoutineBtnHeight, 
+			hwdHandler, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
 		//routineGUI->editButton = CreateWindowW(L"Button", L"e", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(EDIT_ROUTINE + i - 1), NULL, NULL);
-		routineGUI->deleteButton = CreateWindowW(L"Button", L"X", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
+		routineGUI->deleteButton = CreateWindowW(L"Button", L"X", WS_VISIBLE | WS_CHILD, 
+			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
+			45 + (RoutineHeight * i) + (i * 5), 
+			RoutineBtnWidth, 
+			RoutineBtnHeight, 
+			hwdHandler, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
 
 		//auto hwndEdit = LoadImage(hInst, MAKEINTRESOURCE(IDB_BITMAP1), IMAGE_BITMAP, 0, 0, LR_DEFAULTCOLOR);
 		//SendMessage(routineGUI->editButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM) hwndEdit);
@@ -703,12 +985,12 @@ void ParseFiles(HDROP hDropInfo)
 				ParseWavFile(std::string(buff));
 			}
 			else {
-				OutputLogStr.append("Error: Not a .wav file.").append("\r\n").append(std::string((char*) buff)).append("\r\n").append("\r\n");
+				OutputLogStr.append("> Error: Not a .wav file.").append("\r\n").append(std::string((char*) buff)).append("\r\n").append("\r\n");
 			}
 		}
 	}
 	else
-		OutputLogStr.append("Error: Didn't find any files to open.\r\n");
+		OutputLogStr.append("> Error: Didn't find any files to open.\r\n");
 
 	// Update GUI
 	DrawRoutineList();
@@ -730,7 +1012,7 @@ void ParseWavFile(std::string newFileName)
 	it = Routines.find(strRoutineName);
 	if (it != Routines.end())
 	{
-		OutputLogStr.append("Warning: Routine with name '").append(strRoutineName).append("' already found. Renaming to '");
+		OutputLogStr.append("> Warning: Routine with name '").append(strRoutineName).append("' already found. Renaming to '");
 		strRoutineName = GenerateRoutineName();
 		OutputLogStr.append(strRoutineName).append("' instead.").append("\r\n");
 	}
@@ -738,18 +1020,18 @@ void ParseWavFile(std::string newFileName)
 	// Check if filename is a valid variable name
 	else if (!IsValidVarName(strRoutineName))
 	{
-		OutputLogStr.append("Warning: Filename '").append(strRoutineName).append("' cannot be used as a variable name. Renaming to '");
+		OutputLogStr.append("> Warning: Filename '").append(strRoutineName).append("' cannot be used as a variable name. Renaming to '");
 		strRoutineName = GenerateRoutineName();
 		OutputLogStr.append(strRoutineName).append("' instead.").append("\r\n");
 	}
 
-	ParseRoutineInput(strCueInfo, strRoutineName);
+	ParseRoutineInput(strCueInfo, strRoutineName, fileName);
 }
 
 //---------------------------------------------------------------------------
 
 // Parses cue information into a routine
-void ParseRoutineInput(std::string input, std::string routineName)
+void ParseRoutineInput(std::string input, std::string routineName, std::string fileName)
 {
 	std::istringstream ifs(input);
 	std::istringstream ifsLine;
@@ -759,6 +1041,9 @@ void ParseRoutineInput(std::string input, std::string routineName)
 	bool bFound;
 
 	unsigned long time1, time2, endTime = 0;
+
+	// Set .wav file path
+	routineGUI.routine.wavFilePath = fileName;
 
 	// Format strings
 	std::string comma = ", ";
@@ -772,7 +1057,7 @@ void ParseRoutineInput(std::string input, std::string routineName)
 	// Check for propper start of cue information
 	if (line.find("File:") == std::string::npos)
 	{
-		OutputLogStr.append(" Error: Unable to parse input. Please check format and try again.\r\n");
+		OutputLogStr.append("> Error: Unable to parse input. Please check format and try again.\r\n");
 		return;
 	}
 
@@ -840,7 +1125,7 @@ void ParseRoutineInput(std::string input, std::string routineName)
 	// Ensure that nothing went wrong during parsing and at least one light was parsed
 	if (routineGUI.routine.lights.size() <= 0)
 	{
-		OutputLogStr.append(" Warning: Routine found with no lights. Ensure formatting is correct.\r\n");
+		OutputLogStr.append("> Warning: Routine found with no lights. Ensure formatting is correct.\r\n");
 		return;
 	}
 
@@ -849,11 +1134,11 @@ void ParseRoutineInput(std::string input, std::string routineName)
 	itRoutine = Routines.find(routineGUI.routine.name);
 	if (itRoutine == Routines.end()) {
 		std::ostringstream outputSream;
-		outputSream << " Added routine \"" << routineGUI.routine.name << "\" containing " << routineGUI.routine.lights.size() << " lights\r\n";
+		outputSream << "> Added routine \"" << routineGUI.routine.name << "\" containing " << routineGUI.routine.lights.size() << " lights\r\n";
 		OutputLogStr.append(outputSream.str());
 	}
 	else {
-		OutputLogStr.append(" Warning: Already found routine with name \"");
+		OutputLogStr.append("> Warning: Already found routine with name \"");
 		OutputLogStr.append(routineGUI.routine.name);
 		OutputLogStr.append("\". Old routine will be overwritten.\r\n");
 	}

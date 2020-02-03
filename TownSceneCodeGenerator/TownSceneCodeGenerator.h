@@ -48,6 +48,7 @@ public:
 	std::string name;
 	std::map<std::string, Light> lights;
 	unsigned long endTime;
+	std::string wavFilePath;
 };
 
 // Used to link GUI objects to a routine
@@ -89,11 +90,13 @@ public:
 	bool bAddDebugStatements = false;							// #Defines DEBUG in generated code, causing Arduino to print out some helpful debug statements
 	bool bRandomizeRoutineOrder = false;						// Should the generated code randomize the routine that's played every loop?
 	bool bSwapOnOffValues = false;								// Should a "turn light on" command write LOW instead of HIGH?
+	bool bUploadToMp3 = false;									// Should upload mp3 songs to the MP3 player
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player
 	std::string mp3VolumePin = "";								// Pin used to control the volume
 	std::string trainPinLeft = "";								// Pin used to reset the train; Generates the needed code if this is not empty
+	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
 
 	bool IsTrainPin(std::string pin)
 	{
