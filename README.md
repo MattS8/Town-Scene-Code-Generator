@@ -6,7 +6,7 @@ This program was created for use with an **Arduino Nano**. It may work for other
 
 ## Usage
 ### Declaring Used Pins
-First, you must enter the pin number used to control the MP3 skip and MP3 volume control. These must be entered as standard pins (i.e. `D1` or `A2`).
+First, you must enter the pin numbers used to control the MP3 skip and MP3 volume control. These must be entered as standard pins (i.e. `D1` or `A2`).
 
 Second, check all the boxes next to pins used to control the lights in each house. **Do not check the boxes for pins that are used for MP3 skip, volume control, train pins, etc.**.
 
