@@ -14,6 +14,7 @@
 #define UPLOAD_CODE 2002
 #define UPLOAD_TO_MP3 2003
 
+#define USE_HALLOWEEN_CONTROLS 2004
 #define PRETTY_PRINT 5
 #define GENERATE_CODE 4
 #define CREATE_ROUTINE 7
@@ -64,6 +65,8 @@ HWND hOutputLog;
 HWND hMP3VolPin;
 HWND hTrainLeftPin;
 HWND hSwapOnOffValues;
+HWND hUseHalloweenMP3Controls;
+HWND hAllLightsOnBlock;
 
 
 HWND hcbA[6];
@@ -494,6 +497,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.bSwapOnOffValues = !Options.bSwapOnOffValues;
 				CheckDlgButton(hWnd, SWAP_ONOFF, Options.bSwapOnOffValues ? BST_CHECKED : BST_UNCHECKED);
 				break;
+			case USE_HALLOWEEN_CONTROLS:
+				Options.bUseHalloweenMP3Controls = !Options.bUseHalloweenMP3Controls;
+				CheckDlgButton(hWnd, USE_HALLOWEEN_CONTROLS, Options.bUseHalloweenMP3Controls ? BST_CHECKED : BST_UNCHECKED);
+				break;
 			case CREATE_ROUTINE:
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_ADDROUTINE), hWnd, AddRoutine);
 				break;
@@ -510,6 +517,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
+				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				if (RequiredFieldsFilled())
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_VIEWCODE), hWnd, GenerateCodeCB);
 				else
@@ -521,6 +529,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
+				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				if (RequiredFieldsFilled())
 					WriteCodeToArduino(FALSE);
 				else
@@ -532,6 +541,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
+				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				if (RequiredFieldsFilled())
 					WriteCodeToArduino(TRUE);
 				else
@@ -767,6 +777,7 @@ void AddControls(HWND handler)
 	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110, 35, 175, 30, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
 	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175, 35, 205, 30, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);
 	hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175 + 200, 35, 175, 30, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
+	hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175 + 200 + 175, 35, 225, 30, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
 	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
 	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
 	CreateWindowW(L"Static", L"Required Fields: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150, reqFielsLen, 20, handler, NULL, NULL, NULL);
@@ -798,10 +809,10 @@ void AddControls(HWND handler)
 			20, 
 			handler, (HMENU)(USE_LIGHT + 7+i), NULL, NULL);
 	}
-	CreateWindowW(L"Static", L"MP3 Skip Pin: ", WS_VISIBLE | WS_CHILD, 
+	CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, 
 		secondColumnStart, 
 		150 + 30, 
-		95, 
+		105, 
 		20, 
 		handler, NULL, NULL, NULL);
 	hMP3Pin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
@@ -823,21 +834,33 @@ void AddControls(HWND handler)
 		20,
 		handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Train Pin: ", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart, 
+		secondColumnStart + pinEditWidth + 140, 
+		75, 
 		100, 
-		140, 
 		20, 
 		handler, NULL, NULL, NULL);
 	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
-		secondColumnStart + reqFielsLen, 
-		100, 
+		secondColumnStart + reqFielsLen + pinEditWidth + 85,
+		75, 
 		pinEditWidth, 
 		20, 
 		handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"MP3 Volume Pin: ", WS_VISIBLE | WS_CHILD, 
+	CreateWindowW(L"Static", L"All Lights On Block (ms): ", WS_VISIBLE | WS_CHILD,
+		secondColumnStart + reqFielsLen + pinEditWidth + 85 + pinEditWidth + 10,
+		75,
+		175,
+		20,
+		handler, NULL, NULL, NULL);
+	hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER,
+		secondColumnStart + reqFielsLen + pinEditWidth + 85 + pinEditWidth + 10 + 170,
+		75,
+		pinEditWidth*3,
+		20,
+		handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, 
 		secondColumnStart, 
 		150 + 55, 
-		140, 
+		105, 
 		20, 
 		handler, NULL, NULL, NULL);
 	hMP3VolPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
@@ -1175,7 +1198,8 @@ std::string GenerateCode()
 	if (!Options.motionSensorPin.empty())
 		outputString << "#define PMotionSense " << Options.motionSensorPin << "\r\n";
 	outputString << "#define MP3SkipPin " << Options.mp3SkipPin << "\r\n";
-	outputString << "#define MP3VolumePin " << Options.mp3VolumePin << "\r\n";
+	if (!Options.mp3VolumePin.empty())
+		outputString << "#define MP3VolumePin " << Options.mp3VolumePin << "\r\n";
 	if (!Options.trainPinLeft.empty())
 		outputString << "#define TrainPin " << Options.trainPinLeft << "\r\n";
 	if (Options.bAddDebugStatements)
@@ -1291,9 +1315,11 @@ std::string GenerateCode()
 	outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Wheter the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= light->Times[i].Start && DeltaTime < light->Times[i].End)\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;
 
-	// Skip To Routine
-	outputString << "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n * 	track to the desired track.\r\n *   Returns: array position of next routine\r\n **/\r\nint SkipToRoutine()\r\n{\r\n	int nextRoutine = bRandomizeRoutineOrder \r\n		? CurrentRoutine \r\n		: CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n	int numberOfSkips = 1;\r\n	if(bRandomizeRoutineOrder && NUM_ROUTINES > 1)\r\n	{\r\n		while (nextRoutine == CurrentRoutine)\r\n			nextRoutine = random(0, NUM_ROUTINES);\r\n		numberOfSkips = nextRoutine < CurrentRoutine\r\n			? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n			: nextRoutine - CurrentRoutine;\r\n		#ifdef DEBUG\r\n		Serial.print(\"Current routine :\"); \r\n		Serial.println(CurrentRoutine); \r\n		Serial.print(\"Routine \");\r\n		Serial.print(nextRoutine);\r\n		Serial.print(\" selected(skipping \");\r\n		Serial.print(numberOfSkips);\r\n		Serial.println(\" times)\");\r\n		#endif\r\n	}\r\n	for (int i = 0; i < numberOfSkips; i++)\r\n	{\r\n		digitalWrite(MP3SkipPin, HIGH);\r\n		delay(80);\r\n		digitalWrite(MP3SkipPin, LOW);\r\n		delay(100);\r\n	}\r\n	return nextRoutine;\r\n}\r\n";
-	outputString << extraLine;
+	if (!Options.bUseHalloweenMP3Controls) {
+		// Skip To Routine
+		outputString << "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n * 	track to the desired track.\r\n *   Returns: array position of next routine\r\n **/\r\nint SkipToRoutine()\r\n{\r\n	int nextRoutine = bRandomizeRoutineOrder \r\n		? CurrentRoutine \r\n		: CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n	int numberOfSkips = 1;\r\n	if(bRandomizeRoutineOrder && NUM_ROUTINES > 1)\r\n	{\r\n		while (nextRoutine == CurrentRoutine)\r\n			nextRoutine = random(0, NUM_ROUTINES);\r\n		numberOfSkips = nextRoutine < CurrentRoutine\r\n			? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n			: nextRoutine - CurrentRoutine;\r\n		#ifdef DEBUG\r\n		Serial.print(\"Current routine :\"); \r\n		Serial.println(CurrentRoutine); \r\n		Serial.print(\"Routine \");\r\n		Serial.print(nextRoutine);\r\n		Serial.print(\" selected(skipping \");\r\n		Serial.print(numberOfSkips);\r\n		Serial.println(\" times)\");\r\n		#endif\r\n	}\r\n	for (int i = 0; i < numberOfSkips; i++)\r\n	{\r\n		digitalWrite(MP3SkipPin, HIGH);\r\n		delay(80);\r\n		digitalWrite(MP3SkipPin, LOW);\r\n		delay(100);\r\n	}\r\n	return nextRoutine;\r\n}\r\n";
+		outputString << extraLine;
+	}
 
 	// Turn All Lights
 	outputString << "/** Turns all lights on or off.\r\n *	- state: ON or OFF\r\n **/\r\nvoid TurnAllLights(int state)\r\n{\r\n	for (int i=0; i < NUM_LIGHTS; i++)	\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.print(\"Turning light \");\r\n		Serial.print(AllLights[i]);\r\n		Serial.println(state == ON ? \" ON\" : \" OFF\");\r\n		#endif\r\n		digitalWrite(AllLights[i], state);	\r\n	}\r\n}\r\n";
@@ -1332,7 +1358,28 @@ std::string GenerateCode()
 	outputString << "void loop()\r\n{\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "\twhile (analogRead(PMotionSense) < 500) ;\r\n";
-	outputString << "	CurrentRoutine = SkipToRoutine();\r\n	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= routines[CurrentRoutine]->RoutineTime);\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = routines[CurrentRoutine]->RoutineTime;\r\n}\r\n";
+	if (Options.bUseHalloweenMP3Controls) {
+		outputString << "	CurrentRoutine = 0;\r\n	digitalWrite(MP3SkipPin, HIGH);";
+	}
+	else {
+		outputString << "	CurrentRoutine = SkipToRoutine();";
+	}
+	outputString << "\r\n	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n";
+
+	if (!Options.mp3VolumePin.empty())
+		outputString << "digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
+	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= routines[CurrentRoutine]->RoutineTime);\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = routines[CurrentRoutine]->RoutineTime;\r\n";
+	if (Options.bUseHalloweenMP3Controls) {
+		outputString << "	digitalWrite(MP3SkipPin, LOW);\r\n";
+	}
+
+	if (Options.allLightsOnBlock > 0) {
+		outputString << "	for (int j = 0; j < routines[CurrentRoutine]->NumberOfLights; j++)\r\n		digitalWrite(routines[CurrentRoutine]->Lights[j]->Pin, ON);\r\n";
+		outputString << "	delay(" << Options.allLightsOnBlock << ");\r\n";
+		outputString << "	for (int j = 0; j < routines[CurrentRoutine]->NumberOfLights; j++)\r\n		digitalWrite(routines[CurrentRoutine]->Lights[j]->Pin, OFF);\r\n";
+		outputString << "	delay(200);\r\n";
+	}
+	outputString << "}\r\n";
 	outputString << extraLine;
 
 	return outputString.str();

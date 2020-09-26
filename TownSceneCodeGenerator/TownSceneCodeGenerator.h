@@ -91,12 +91,15 @@ public:
 	bool bRandomizeRoutineOrder = false;						// Should the generated code randomize the routine that's played every loop?
 	bool bSwapOnOffValues = false;								// Should a "turn light on" command write LOW instead of HIGH?
 	bool bUploadToMp3 = false;									// Should upload mp3 songs to the MP3 player
+	bool bUseHalloweenMP3Controls = false;						// Should use legacy mp3 control scheme (simply power MP3 On to play, off to stop playing)
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player
 	std::string mp3VolumePin = "";								// Pin used to control the volume
 	std::string trainPinLeft = "";								// Pin used to reset the train; Generates the needed code if this is not empty
 	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
+
+	unsigned long allLightsOnBlock = 0;
 
 	bool IsTrainPin(std::string pin)
 	{
@@ -137,6 +140,18 @@ std::string GetStringFromWindow(HWND hwnd)
 	}
 
 	return "";
+}
+
+unsigned long GetLongFromWindow(HWND hwnd)
+{
+	std::string windowText = GetStringFromWindow(hwnd);
+
+	if (!windowText.empty()) {
+		return (unsigned long)strtol(windowText.c_str(), NULL, 0);
+	}
+	else {
+		return 0;
+	}
 }
 
 //---------------------------------------------------------------------------
