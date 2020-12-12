@@ -100,6 +100,7 @@ public:
 	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
 
 	unsigned long allLightsOnBlock = 0;
+	unsigned long trainResetDuration = 0;						// The duration to run the train at the beginning of each power up
 
 	bool IsTrainPin(std::string pin)
 	{

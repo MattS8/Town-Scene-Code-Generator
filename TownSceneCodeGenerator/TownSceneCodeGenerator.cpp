@@ -67,6 +67,7 @@ HWND hTrainLeftPin;
 HWND hSwapOnOffValues;
 HWND hUseHalloweenMP3Controls;
 HWND hAllLightsOnBlock;
+HWND hTrainResetDuration;
 
 
 HWND hcbA[6];
@@ -296,16 +297,17 @@ void WriteCodeToArduino(bool uploadDirectly)
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 	}
 
-	std::map<std::string, RoutineGUI>::iterator it = Routines.begin();
-	while (it != Routines.end()) {
-		std::string mp3FilePath = it->second.routine.wavFilePath.substr(0, it->second.routine.wavFilePath.size() - 3);
+	std::list<std::string>::iterator it = OrderTracker.routineNames.begin();
+	while (it != OrderTracker.routineNames.end()) {
+		auto routineGUI = Routines.find(*it);
+		std::string mp3FilePath = routineGUI->second.routine.wavFilePath.substr(0, routineGUI->second.routine.wavFilePath.size() - 3);
 		mp3FilePath.append("mp3");
 		//OutputLogStr.append("MP3 file path: ").append(mp3FilePath).append("\r\n");
 		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 
 	
 		if (Options.mp3DriveLetter.size() > 0) {
-			bool success = CopySongToMp3Player(mp3FilePath, it->second.routine.name);
+			bool success = CopySongToMp3Player(mp3FilePath, routineGUI->second.routine.name);
 			if (!success)
 				return;
 		}
@@ -518,6 +520,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
+				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				if (RequiredFieldsFilled())
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_VIEWCODE), hWnd, GenerateCodeCB);
 				else
@@ -530,6 +533,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
+				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				if (RequiredFieldsFilled())
 					WriteCodeToArduino(FALSE);
 				else
@@ -542,6 +546,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
+				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				if (RequiredFieldsFilled())
 					WriteCodeToArduino(TRUE);
 				else
@@ -733,7 +738,7 @@ bool RequiredFieldsFilled()
 	if (Routines.size() == 0) 
 	{
 		OutputLogStr.append("> Error: Nothing to show. Please add routines and try again.\r\n");
-		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
 	}
 
@@ -741,6 +746,14 @@ bool RequiredFieldsFilled()
 	if (Options.mp3SkipPin.size() == 0)
 	{
 		OutputLogStr.append("> Error: No pins declared for the MP3 Player.\r\n");
+		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		bRequiredFieldsFilled = false;
+	}
+
+	// Need train reset duration if train pin is declared
+	if (!Options.trainPinLeft.empty() && Options.trainResetDuration == 0) {
+		OutputLogStr.append("> Error: Train Reset Duration must be set if a train pin is declared.\r\n");
+		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
 	}
 
@@ -839,6 +852,18 @@ void AddControls(HWND handler)
 		100, 
 		20, 
 		handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Train Reset Duration: ", WS_VISIBLE | WS_CHILD,
+		secondColumnStart + pinEditWidth + 140,
+		108,
+		145,
+		20,
+		handler, NULL, NULL, NULL);
+	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER,
+		secondColumnStart + pinEditWidth + 140 + 150,
+		108,
+		pinEditWidth*2,
+		20,
+		handler, NULL, NULL, NULL);
 	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
 		secondColumnStart + reqFielsLen + pinEditWidth + 85,
 		75, 
@@ -854,7 +879,7 @@ void AddControls(HWND handler)
 	hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER,
 		secondColumnStart + reqFielsLen + pinEditWidth + 85 + pinEditWidth + 10 + 170,
 		75,
-		pinEditWidth*3,
+		pinEditWidth*2,
 		20,
 		handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, 
@@ -1347,7 +1372,7 @@ std::string GenerateCode()
 	// Setup
 	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	if (Options.trainPinLeft.empty())
-		outputString << "	delay(7000);\r\n";
+		outputString << "	delay(" << Options.trainResetDuration << ");\r\n";
 	else
 		outputString << "	#ifdef DEBUG\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n	digitalWrite(TrainPin, ON);\r\n	delay(7000);\r\n	digitalWrite(TrainPin, OFF);\r\n	#ifdef DEBUG\r\n	Serial.println(\"Finished resetting train!\");\r\n	#endif\r\n";
 	outputString << "	TurnAllLights(OFF);\r\n";
