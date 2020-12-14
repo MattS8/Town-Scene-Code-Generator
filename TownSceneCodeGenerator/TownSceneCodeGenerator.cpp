@@ -298,7 +298,23 @@ void WriteCodeToArduino(bool uploadDirectly)
 	}
 
 	std::list<std::string>::iterator it = OrderTracker.routineNames.begin();
+
+	if (!Options.bUseHalloweenMP3Controls) {
+		auto firstRoutineGUI = Routines.find(OrderTracker.routineNames.back());
+		std::string firstMp3FilePath = firstRoutineGUI->second.routine.wavFilePath.substr(0, firstRoutineGUI->second.routine.wavFilePath.size() - 3);
+		firstMp3FilePath.append("mp3");
+
+		if (Options.mp3DriveLetter.size() > 0) {
+			bool firstSuccess = CopySongToMp3Player(firstMp3FilePath, firstRoutineGUI->second.routine.name);
+			if (!firstSuccess)
+				return;
+		}
+	}
+
 	while (it != OrderTracker.routineNames.end()) {
+		if (!Options.bUseHalloweenMP3Controls && std::next(it) == OrderTracker.routineNames.end())
+			break;
+
 		auto routineGUI = Routines.find(*it);
 		std::string mp3FilePath = routineGUI->second.routine.wavFilePath.substr(0, routineGUI->second.routine.wavFilePath.size() - 3);
 		mp3FilePath.append("mp3");
@@ -311,10 +327,8 @@ void WriteCodeToArduino(bool uploadDirectly)
 			if (!success)
 				return;
 		}
-
-		it++;
+		++it;
 	}
-	
 
 	// Create Directory
 	bool bErrorFlag = CreateDirectoryW(wsTempDirectoryPath.c_str(), &SA);
@@ -1328,8 +1342,8 @@ std::string GenerateCode()
 	}
 
 	outputString << "#define NUM_ROUTINES " << Routines.size() << "\r\n";
-	std::string routinesString = OrderTracker.getRoutinesString();
-	outputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesString.substr(0, routinesString.size()-1) << "};\r\n" << extraLine; //CHECK  THIS
+	std::string routinesString = OrderTracker.getRoutinesString(Options.bUseHalloweenMP3Controls);
+	outputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesString << "};\r\n" << extraLine; //CHECK  THIS
 
 	if (Options.bPrettyPrint)
 	{
@@ -1372,9 +1386,9 @@ std::string GenerateCode()
 	// Setup
 	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	if (Options.trainPinLeft.empty())
-		outputString << "	delay(" << Options.trainResetDuration << ");\r\n";
+		outputString << "	delay(7000);\r\n";
 	else
-		outputString << "	#ifdef DEBUG\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n	digitalWrite(TrainPin, ON);\r\n	delay(7000);\r\n	digitalWrite(TrainPin, OFF);\r\n	#ifdef DEBUG\r\n	Serial.println(\"Finished resetting train!\");\r\n	#endif\r\n";
+		outputString << "	#ifdef DEBUG\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n	digitalWrite(TrainPin, ON);\r\n	delay(" << Options.trainResetDuration << ");\r\n	digitalWrite(TrainPin, OFF);\r\n	#ifdef DEBUG\r\n	Serial.println(\"Finished resetting train!\");\r\n	#endif\r\n";
 	outputString << "	TurnAllLights(OFF);\r\n";
 	outputString << "}\r\n";
 	outputString << extraLine;
