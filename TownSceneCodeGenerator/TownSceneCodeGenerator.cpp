@@ -15,6 +15,7 @@
 #define UPLOAD_TO_MP3 2003
 
 #define USE_HALLOWEEN_CONTROLS 2004
+#define CLEAR_LOG 2005
 #define PRETTY_PRINT 5
 #define GENERATE_CODE 4
 #define CREATE_ROUTINE 7
@@ -68,6 +69,7 @@ HWND hSwapOnOffValues;
 HWND hUseHalloweenMP3Controls;
 HWND hAllLightsOnBlock;
 HWND hTrainResetDuration;
+HWND hClearLog;
 
 
 HWND hcbA[6];
@@ -573,6 +575,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.bUploadToMp3 = !Options.bUploadToMp3;
 				CheckDlgButton(hWnd, wmId, Options.bUploadToMp3 ? BST_CHECKED : BST_UNCHECKED);
 				break;
+			case CLEAR_LOG:
+				OutputLogStr = "";
+				SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+				break;
             default:
 				if		(wmId >= USE_LIGHT && wmId <= USE_LIGHT + 18)					CheckSelectedPin(wmId, hWnd);
 				else if (wmId >= MOVE_ROUTINE_DOWN && wmId <= MOVE_ROUTINE_DOWN_END)	MoveRoutine(wmId, DOWN);
@@ -933,6 +939,12 @@ void AddControls(HWND handler)
 		secondColumnStart - 25, 
 		20, 
 		handler, NULL, NULL, NULL);
+	hClearLog = CreateWindowW(L"Button", L"Clear  (X)", WS_VISIBLE | WS_CHILD, 
+		secondColumnStart + 100,
+		bottomStart + 45,
+		200,
+		20,
+		handler, (HMENU)CLEAR_LOG, NULL, NULL);
 	hOutputLog = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL | ES_WANTRETURN | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_MULTILINE | ES_READONLY,
 		secondColumnStart, 
 		bottomStart + 65, 
@@ -1356,7 +1368,7 @@ std::string GenerateCode()
 
 	if (!Options.bUseHalloweenMP3Controls) {
 		// Skip To Routine
-		outputString << "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n * 	track to the desired track.\r\n *   Returns: array position of next routine\r\n **/\r\nint SkipToRoutine()\r\n{\r\n	int nextRoutine = bRandomizeRoutineOrder \r\n		? CurrentRoutine \r\n		: CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n	int numberOfSkips = 1;\r\n	if(bRandomizeRoutineOrder && NUM_ROUTINES > 1)\r\n	{\r\n		while (nextRoutine == CurrentRoutine)\r\n			nextRoutine = random(0, NUM_ROUTINES);\r\n		numberOfSkips = nextRoutine < CurrentRoutine\r\n			? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n			: nextRoutine - CurrentRoutine;\r\n		#ifdef DEBUG\r\n		Serial.print(\"Current routine :\"); \r\n		Serial.println(CurrentRoutine); \r\n		Serial.print(\"Routine \");\r\n		Serial.print(nextRoutine);\r\n		Serial.print(\" selected(skipping \");\r\n		Serial.print(numberOfSkips);\r\n		Serial.println(\" times)\");\r\n		#endif\r\n	}\r\n	for (int i = 0; i < numberOfSkips; i++)\r\n	{\r\n		digitalWrite(MP3SkipPin, HIGH);\r\n		delay(80);\r\n		digitalWrite(MP3SkipPin, LOW);\r\n		delay(100);\r\n	}\r\n	return nextRoutine;\r\n}\r\n";
+		outputString << "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n * 	track to the desired track.\r\n *   Returns: array position of next routine\r\n **/\r\nint SkipToRoutine()\r\n{\r\n	int nextRoutine = bRandomizeRoutineOrder \r\n		? CurrentRoutine \r\n		: CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n	int numberOfSkips = 1;\r\n	if(bRandomizeRoutineOrder && NUM_ROUTINES > 1)\r\n	{\r\n		while (nextRoutine == CurrentRoutine)\r\n			nextRoutine = random(0, NUM_ROUTINES);\r\n		numberOfSkips = nextRoutine < CurrentRoutine\r\n			? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n			: nextRoutine - CurrentRoutine;\r\n		#ifdef DEBUG\r\n		Serial.print(\"Current routine :\"); \r\n		Serial.println(CurrentRoutine); \r\n		Serial.print(\"Routine \");\r\n		Serial.print(nextRoutine);\r\n		Serial.print(\" selected(skipping \");\r\n		Serial.print(numberOfSkips);\r\n		Serial.println(\" times)\");\r\n		#endif\r\n	}\r\n	for (int i = 0; i < numberOfSkips; i++)\r\n	{\r\n		digitalWrite(MP3SkipPin, HIGH);\r\n		delay(150);\r\n		digitalWrite(MP3SkipPin, LOW);\r\n		delay(150);\r\n	}\r\n	return nextRoutine;\r\n}\r\n";
 		outputString << extraLine;
 	}
 
