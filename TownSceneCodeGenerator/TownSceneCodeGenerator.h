@@ -72,11 +72,21 @@ public:
 	std::string getRoutinesString(bool isHalloweenVariant)
 	{
 		std::string strRet = "";
-		std::list<std::string>::iterator it;
-		for (it = routineNames.begin(); it != routineNames.end(); ++it)
-		{
-			strRet.append("&").append(*it).append(",");
+		std::list<std::string>::iterator it = routineNames.begin();
+
+		if (!isHalloweenVariant) {
+			strRet.append("&").append(routineNames.back()).append(",");
 		}
+
+		while (it != routineNames.end()) {
+			if (!isHalloweenVariant && std::next(it) == routineNames.end())
+				break;
+
+			strRet.append("&").append(*it).append(",");
+			++it;
+		}
+
+		strRet = strRet.substr(0, strRet.size() - 1);
 
 		return strRet;
 	}
