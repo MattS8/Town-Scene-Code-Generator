@@ -1246,6 +1246,8 @@ std::string GenerateCode()
 
 	// Constants and #Defines 
 	outputString << "#define ulong unsigned long\r\n#define ON " << (Options.bSwapOnOffValues ? 0 : 1) << "\r\n#define OFF " << (Options.bSwapOnOffValues ? 1 : 0) <<"\r\n#define P_ALL_OFF -1\r\n#define P_ALL_ON -2\r\n";
+	if (Options.bPrettyPrint)
+		outputString << "// PINS\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "#define PMotionSense " << Options.motionSensorPin << "\r\n";
 	outputString << "#define MP3SkipPin " << Options.mp3SkipPin << "\r\n";
@@ -1255,8 +1257,12 @@ std::string GenerateCode()
 		outputString << "#define TrainPin " << Options.trainPinLeft << "\r\n";
 	if (Options.bAddDebugStatements)
 		outputString << "#define DEBUG\r\n";
-	outputString << "int D2 = 2" << comma << "D3 = 3" << comma << "D4 = 4" << comma << "D5 = 5" << comma << "D6 = 6" << comma << "D7 = 7" << comma << "D8 = 8";
-	outputString << comma << "D9 = 9" << comma << "D10 = 10" << comma << "D11 = 11" << comma << "D12 = 12" << comma << "D13 = 13;\r\nbool bAllLightsOn = false;\r\nbool bRandomizeRoutineOrder = " << (Options.bRandomizeRoutineOrder ? "true" : "false") << ";\r\n";
+	outputString << "#define D2 2\r\n" << "#define D3 3\r\n" << "#define D4 4\r\n" << "#define D5 5\r\n" << "#define D6 6\r\n" << "#define D7 7\r\n" << "#define D8 8\r\n";
+	outputString << "#define D9 9\r\n" << "#define D10 10\r\n" << "#define D11 11\r\n" << "#define D12 12\r\n" << "#define D13 13\r\n";
+	if (Options.bPrettyPrint)
+		outputString << "\r\n";
+
+	outputString <<	"bool bAllLightsOn = false;\r\n#define bRandomizeRoutineOrder " << (Options.bRandomizeRoutineOrder ? "true" : "false") << "\r\n";
 	int numLights = 0;
 	int temp = 0;
 	for (i = 0; i < 6; i++)
