@@ -1,4 +1,4 @@
-﻿// TownSceneCodeGenerator.cpp : Defines the entry point for the application.
+// TownSceneCodeGenerator.cpp : Defines the entry point for the application.
 //
 
 #include "stdafx.h"
@@ -50,7 +50,7 @@ GenerationOptions Options;						// Code generation options
 // UI Variables:
 int RoutineHeight = 25;
 int RoutineWidth = 100;
-int RoutineBtnWidth = 50;
+int RoutineBtnWidth = 100;
 int RoutineBtnHeight = 25;
 int width = 1300;
 int height = 1300;
@@ -274,7 +274,7 @@ bool CopySongToMp3Player(std::string mp3FilePath, std::string fileName)
 	delete wMp3SourcePath;
 	if (bErrorFlag == FALSE) {
 		std::ostringstream os;
-		os << "> Error: Unable to copy over " << fileName << " (Error Code: " << GetLastError() << ")\r\n";
+		os << "> ---- Error: Unable to copy over " << fileName << " (Error Code: " << GetLastError() << ") ----\r\n";
 		OutputLogStr.append(os.str());
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		return FALSE;
@@ -292,11 +292,10 @@ void WriteCodeToArduino(bool uploadDirectly)
 	SA.nLength = sizeof(SECURITY_ATTRIBUTES);
 	SA.bInheritHandle = TRUE;
 
-	std::wstring wsTempDirectoryPath = L"C:\\temp\\TownSceneCodeGenerator\\";
+	std::wstring wsTempDirectoryPath = L"C:\\temp\\TownSceneCodeGenerator";
 
-	if (Options.mp3DriveLetter.size() == 0) {
+	if (Options.mp3DriveLetter.size() == 0 && uploadDirectly) {
 		OutputLogStr.append("> Warning: No MP3 drive letter was given. Files will not be uploaded to the MP3 player.\r\n");
-		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 	}
 
 	std::list<std::string>::iterator it = OrderTracker.routineNames.begin();
@@ -306,7 +305,7 @@ void WriteCodeToArduino(bool uploadDirectly)
 		std::string firstMp3FilePath = firstRoutineGUI->second.routine.wavFilePath.substr(0, firstRoutineGUI->second.routine.wavFilePath.size() - 3);
 		firstMp3FilePath.append("mp3");
 
-		if (Options.mp3DriveLetter.size() > 0) {
+		if (Options.mp3DriveLetter.size() > 0 && uploadDirectly) {
 			bool firstSuccess = CopySongToMp3Player(firstMp3FilePath, firstRoutineGUI->second.routine.name);
 			if (!firstSuccess)
 				return;
@@ -324,7 +323,7 @@ void WriteCodeToArduino(bool uploadDirectly)
 		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 
 	
-		if (Options.mp3DriveLetter.size() > 0) {
+		if (Options.mp3DriveLetter.size() > 0 && uploadDirectly) {
 			bool success = CopySongToMp3Player(mp3FilePath, routineGUI->second.routine.name);
 			if (!success)
 				return;
@@ -333,6 +332,8 @@ void WriteCodeToArduino(bool uploadDirectly)
 	}
 
 	// Create Directory
+	std::wstring wsTempDir = L"C:\\temp";
+	CreateDirectoryW(wsTempDir.c_str(), &SA);
 	bool bErrorFlag = CreateDirectoryW(wsTempDirectoryPath.c_str(), &SA);
 
 	//ERROR
@@ -345,7 +346,7 @@ void WriteCodeToArduino(bool uploadDirectly)
 		}
 		else if (dwError != ERROR_ALREADY_EXISTS) {
 			std::ostringstream os;
-			os << "> Error: Unable to create temporary directory for .ino file. (UNKNOWN ERROR: " << dwError << ")\r\n";
+			os << "> ---- Error: Unable to create temporary directory for .ino file. (UNKNOWN ERROR: " << dwError << ") ----\r\n";
 			OutputLogStr.append(os.str());
 			SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 			return;
@@ -363,7 +364,7 @@ void WriteCodeToArduino(bool uploadDirectly)
 
 	// ERROR
 	if (hFileOut == INVALID_HANDLE_VALUE) {
-		OutputLogStr.append("> Error: Unable to create temporary .ino file.\r\n");
+		OutputLogStr.append("> ---- Error: Unable to create temporary .ino file. ----\r\n");
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		return;
 	}
@@ -383,13 +384,13 @@ void WriteCodeToArduino(bool uploadDirectly)
 
 	//ERROR
 	if (bErrorFlag == FALSE) {
-		OutputLogStr.append("> Error: Unable to write to temporary .ino file.\r\n");
+		OutputLogStr.append("> ---- Error: Unable to write to temporary .ino file. ----\r\n");
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		return;
 	}
 	//ERROR
 	else if (dwBytesToWrite != dwBytesWritten) {
-		OutputLogStr.append("> Error: Synchronous write to temporary .ino file failed.\r\n");
+		OutputLogStr.append("> ---- Error: Synchronous write to temporary .ino file failed. ----\r\n");
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		return;
 	}
@@ -407,7 +408,18 @@ void WriteCodeToArduino(bool uploadDirectly)
 
 		::CreateProcess(0, (LPWSTR)command.c_str(), NULL, NULL, TRUE, CREATE_DEFAULT_ERROR_MODE, NULL, NULL, &SI, &PI);
 
-		OutputLogStr.append("> Successfully sent code to Arduino.\r\n");
+		if (uploadDirectly) {
+			OutputLogStr.append("> ---- Sent code ");
+			if (Options.mp3DriveLetter.size() > 0)
+				OutputLogStr.append("and MP3s to devices!");
+			else
+				OutputLogStr.append("to device!");
+			OutputLogStr.append(" ----\r\n");
+		}
+
+		else
+			OutputLogStr.append("> ---- Successfully created .ino file at: 'C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino' ----\r\n");
+
 		SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		::CloseHandle(PI.hThread);
 		::CloseHandle(PI.hProcess);
@@ -757,7 +769,7 @@ bool RequiredFieldsFilled()
 	// Need at least one routine
 	if (Routines.size() == 0) 
 	{
-		OutputLogStr.append("> Error: Nothing to show. Please add routines and try again.\r\n");
+		OutputLogStr.append("> ---- Error: Nothing to show. Please add routines and try again. ----\r\n");
 		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
 	}
@@ -765,14 +777,14 @@ bool RequiredFieldsFilled()
 	// Need pin number of the MP3 player
 	if (Options.mp3SkipPin.size() == 0)
 	{
-		OutputLogStr.append("> Error: No pins declared for the MP3 Player.\r\n");
+		OutputLogStr.append("> ---- Error: No pins declared for the MP3 Player. ----\r\n");
 		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
 	}
 
 	// Need train reset duration if train pin is declared
 	if (!Options.trainPinLeft.empty() && Options.trainResetDuration == 0) {
-		OutputLogStr.append("> Error: Train Reset Duration must be set if a train pin is declared.\r\n");
+		OutputLogStr.append("> ---- Error: Train Reset Duration must be set if a train pin is declared. ----\r\n");
 		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
 	}
@@ -816,8 +828,8 @@ void AddControls(HWND handler)
 	CreateWindowW(L"Static", L"Required Fields: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150, reqFielsLen, 20, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, 150, 125, 20, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, 150, 150, 20, handler, (HMENU)SELECT_ALL, NULL, NULL);
-	CreateWindowW(L"Static", L"Direct Upload Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos, reqFielsLen + 30, 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"MP3 Drive Letter: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos + 30, 140, 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"MP3 Upload Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos, reqFielsLen + 30, 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Drive Letter: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos + 30, 140, 20, handler, NULL, NULL, NULL);
 	hMP3DriveLetter = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, directUploadOptionsYPos + 30, pinEditWidth, 20, handler,
 		NULL, NULL, NULL);
 	for (i = 0; i < 6; i++)
@@ -922,13 +934,13 @@ void AddControls(HWND handler)
 		200, 
 		35, 
 		handler, (HMENU)GENERATE_CODE, NULL, NULL);
-	CreateWindowW(L"Button", L"Send Code to Arduino", WS_VISIBLE | WS_CHILD, 
+	CreateWindowW(L"Button", L"Create .ino File", WS_VISIBLE | WS_CHILD, 
 		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2) + 210, 
 		bottomStart, 
 		200, 
 		35, 
 		handler, (HMENU)WRITE_TO_ARDUINO, NULL, NULL);
-	CreateWindowW(L"Button", L"Upload Code Directly", WS_VISIBLE | WS_CHILD, 
+	CreateWindowW(L"Button", L"Upload to Device(s)", WS_VISIBLE | WS_CHILD, 
 		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2) + 210 + 210,
 		bottomStart, 
 		150, 35, 
@@ -1004,13 +1016,13 @@ void DrawRoutineList()
 			RoutineWidth, 
 			RoutineHeight, 
 			hwdHandler, NULL, NULL, NULL);
-		routineGUI->upButton = CreateWindowW(L"Button", L"∧", WS_VISIBLE | WS_CHILD, 
+		routineGUI->upButton = CreateWindowW(L"Button", L"Move Up", WS_VISIBLE | WS_CHILD, 
 			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
 			45 + (RoutineHeight * i) + (i*5), 
 			RoutineBtnWidth, 
 			RoutineBtnHeight, 
 			hwdHandler, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
-		routineGUI->downButton = CreateWindowW(L"Button", L"∨", WS_VISIBLE | WS_CHILD, 
+		routineGUI->downButton = CreateWindowW(L"Button", L"Move Down", WS_VISIBLE | WS_CHILD, 
 			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
 			45 + (RoutineHeight * i) + (i * 5), 
 			RoutineBtnWidth, RoutineBtnHeight, 
@@ -1059,12 +1071,12 @@ void ParseFiles(HDROP hDropInfo)
 				ParseWavFile(std::string(buff));
 			}
 			else {
-				OutputLogStr.append("> Error: Not a .wav file.").append("\r\n").append(std::string((char*) buff)).append("\r\n").append("\r\n");
+				OutputLogStr.append("> ---- Error: Not a .wav file.").append("\r\n").append(std::string((char*) buff)).append("\r\n").append("----\r\n");
 			}
 		}
 	}
 	else
-		OutputLogStr.append("> Error: Didn't find any files to open.\r\n");
+		OutputLogStr.append("> ---- Error: Didn't find any files to open. ----\r\n");
 
 	// Update GUI
 	DrawRoutineList();
@@ -1131,7 +1143,7 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 	// Check for propper start of cue information
 	if (line.find("File:") == std::string::npos)
 	{
-		OutputLogStr.append("> Error: Unable to parse input. Please check format and try again.\r\n");
+		OutputLogStr.append("> ---- Error: Unable to parse input. Please check format and try again. ----\r\n");
 		return;
 	}
 
@@ -1246,6 +1258,8 @@ std::string GenerateCode()
 
 	// Constants and #Defines 
 	outputString << "#define ulong unsigned long\r\n#define ON " << (Options.bSwapOnOffValues ? 0 : 1) << "\r\n#define OFF " << (Options.bSwapOnOffValues ? 1 : 0) <<"\r\n#define P_ALL_OFF -1\r\n#define P_ALL_ON -2\r\n";
+	if (Options.bPrettyPrint)
+		outputString << "// PINS\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "#define PMotionSense " << Options.motionSensorPin << "\r\n";
 	outputString << "#define MP3SkipPin " << Options.mp3SkipPin << "\r\n";
@@ -1255,8 +1269,12 @@ std::string GenerateCode()
 		outputString << "#define TrainPin " << Options.trainPinLeft << "\r\n";
 	if (Options.bAddDebugStatements)
 		outputString << "#define DEBUG\r\n";
-	outputString << "int D2 = 2" << comma << "D3 = 3" << comma << "D4 = 4" << comma << "D5 = 5" << comma << "D6 = 6" << comma << "D7 = 7" << comma << "D8 = 8";
-	outputString << comma << "D9 = 9" << comma << "D10 = 10" << comma << "D11 = 11" << comma << "D12 = 12" << comma << "D13 = 13;\r\nbool bAllLightsOn = false;\r\nbool bRandomizeRoutineOrder = " << (Options.bRandomizeRoutineOrder ? "true" : "false") << ";\r\n";
+	outputString << "#define D2 2\r\n" << "#define D3 3\r\n" << "#define D4 4\r\n" << "#define D5 5\r\n" << "#define D6 6\r\n" << "#define D7 7\r\n" << "#define D8 8\r\n";
+	outputString << "#define D9 9\r\n" << "#define D10 10\r\n" << "#define D11 11\r\n" << "#define D12 12\r\n" << "#define D13 13\r\n";
+	if (Options.bPrettyPrint)
+		outputString << "\r\n";
+
+	outputString <<	"bool bAllLightsOn = false;\r\n#define bRandomizeRoutineOrder " << (Options.bRandomizeRoutineOrder ? "true" : "false") << "\r\n";
 	int numLights = 0;
 	int temp = 0;
 	for (i = 0; i < 6; i++)
