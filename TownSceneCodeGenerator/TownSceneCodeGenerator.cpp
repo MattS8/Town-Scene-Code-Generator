@@ -973,7 +973,7 @@ void AddControls(HWND handler)
 		bottomColumStart,
 		bottomStart + 65, 
 		950, 
-		height - (bottomStart + 65),
+		height - (bottomStart + 150),
 		handler, NULL, NULL, NULL);
 }
 
