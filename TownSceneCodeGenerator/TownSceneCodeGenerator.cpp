@@ -850,7 +850,6 @@ void AddControls(HWND handler)
 	int directUploadOptionsYPos = 150 + 55 + 70;
 
 	// HEADERS
-
 	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 175, HeaderHeight, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Optional Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[1], 100, HeaderHeight, handler, NULL, NULL, NULL);
@@ -869,11 +868,9 @@ void AddControls(HWND handler)
 	NextItemW = secondColumnStart;
 	hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 145, ItemHeight, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
 	NextItemW += 145 + ColumSpace;
-	hUseLowPrecisionTimes = CreateWindowW(L"Button", L"Use Low Percision Times", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 190, ItemHeight, handler, (HMENU)USE_LOW_PRECISION_TIMES, NULL, NULL);
+	hUseLowPrecisionTimes = CreateWindowW(L"Button", L"Use Low Precision Times", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 190, ItemHeight, handler, (HMENU)USE_LOW_PRECISION_TIMES, NULL, NULL);
 	NextItemW += 190 + ColumSpace;
 	hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 225, ItemHeight, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
-	
-	
 
 	// Options ROW 3
 	NextItemW = secondColumnStart;
@@ -884,7 +881,6 @@ void AddControls(HWND handler)
 	CreateWindowW(L"Static", L"Train Initialize Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 165, LabelHeight, handler, NULL, NULL, NULL);
 	NextItemW += 165;
 	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
-
 
 	// OPTIONS ROW 4
 	NextItemW = secondColumnStart;
@@ -938,11 +934,10 @@ void AddControls(HWND handler)
 	}
 
 	// ROUTINES GUI
-
 	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
 	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
 	
-
+	// Bottom Bar
 	int bottomStart = OptionsRowHeight[4] + (cbHeight * i) + 25;
 	int bottomColumStart = secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2);
 	CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
@@ -1208,8 +1203,13 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 			std::ostringstream os;
 			os << "{" << time1 << comma << time2 << endBrace;
 
+			// Create OnTimeLowPrecision array
+			std::ostringstream osLP;
+			osLP << "{" << (time1 / 100) << comma << (time2 / 100) << endBrace;
+
 			// Add to list of OnTimes
 			light.onTimes.append(os.str());
+			light.onTimesLowPrecision.append(osLP.str());
 			light.numberOfTimes++;
 
 			// Erase existing light so that the updated one is added porpperly
@@ -1351,7 +1351,12 @@ std::string GenerateCode()
 		outputString << " *                                           Data Structures                                           \r\n";
 		outputString << " * ---------------------------------------------------------------------------------------------------- */\r\n";
 	}
-	outputString << "typedef struct OnTime\r\n{\r\n	unsigned long Start;\r\n	unsigned long End;\r\n} OnTime;\r\n\r\ntypedef struct Light\r\n{ \r\n	int Pin; \r\n	 OnTime* Times; \r\n	int NumberOfOnTimes; \r\n	int State; \r\n } Light; \r\n\r\ntypedef struct Routine\r\n{\r\n	Light** Lights;\r\n	int NumberOfLights;\r\n	unsigned long RoutineTime;\r\n} Routine;\r\n";
+	outputString << "typedef struct OnTime\r\n{\r\n	";
+	if (Options.bUseLowPrecisionTimes)
+		outputString << "unsigned int Start;\r\n	unsigned int End;";
+	else
+		outputString << "unsigned long Start;\r\n	unsigned long End;";
+	outputString << "\r\n} OnTime;\r\n\r\ntypedef struct Light\r\n{ \r\n	int Pin; \r\n	 OnTime* Times; \r\n	int NumberOfOnTimes; \r\n	int State; \r\n } Light; \r\n\r\ntypedef struct Routine\r\n{\r\n	Light** Lights;\r\n	int NumberOfLights;\r\n	" << (Options.bUseLowPrecisionTimes ? "unsigned int" : "unsigned long") << " RoutineTime;\r\n} Routine;\r\n";
 	outputString << extraLine;
 
 	// Routine Variables
@@ -1370,7 +1375,7 @@ std::string GenerateCode()
 		outputString << "//" << itRoutines->second.routine.name << "\r\n";
 		for (itLights = itRoutines->second.routine.lights.begin(); itLights != itRoutines->second.routine.lights.end(); ++itLights)
 		{
-			outputString << "OnTime " << itRoutines->second.routine.name << "_" << itLights->second.name << "_OnTimes[" << itLights->second.numberOfTimes << "] = {" << itLights->second.onTimes << ";\r\n";
+			outputString << "OnTime " << itRoutines->second.routine.name << "_" << itLights->second.name << "_OnTimes[" << itLights->second.numberOfTimes << "] = {" << (Options.bUseLowPrecisionTimes ? itLights->second.onTimesLowPrecision : itLights->second.onTimes) << ";\r\n";
 			outputString << "Light " << itRoutines->second.routine.name << "_" << itLights->second.name << " = {" << itLights->second.pin << comma << itRoutines->second.routine.name;
 			outputString << "_" << itLights->second.name << "_OnTimes" << comma << itLights->second.numberOfTimes << comma << "OFF};\r\n";
 			if (Options.bPrettyPrint)
@@ -1381,7 +1386,7 @@ std::string GenerateCode()
 		outputString << "Light* " << itRoutines->second.routine.name << "_Lights[" << itRoutines->second.routine.lights.size() << "] = {";
 		outputString << osLightArray.str().substr(0, osLightArray.str().size() - (Options.bPrettyPrint ? 2 : 1)) << "};\r\n"; //CHECK  THIS
 		outputString << "Routine " << itRoutines->second.routine.name << " = {" << itRoutines->second.routine.name << "_Lights" << comma << itRoutines->second.routine.lights.size() << comma;
-		outputString << itRoutines->second.routine.endTime << "};\r\n";
+		outputString << (Options.bUseLowPrecisionTimes ? itRoutines->second.routine.endTime/100 : itRoutines->second.routine.endTime) << "};\r\n";
 		if (Options.bPrettyPrint)
 			outputString << "\r\n";
 
@@ -1398,7 +1403,7 @@ std::string GenerateCode()
 	}
 
 	// Check Light
-	outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Wheter the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= light->Times[i].Start && DeltaTime < light->Times[i].End)\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
+	outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Wheter the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "(light->Times[i].Start * 100)" :  "light->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "(light->Times[i].End * 100)" : "light->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;
 
 	if (!Options.bUseHalloweenMP3Controls) {
@@ -1412,11 +1417,11 @@ std::string GenerateCode()
 	outputString << extraLine;
 
 	// All Lights On 
-	outputString << "/** Checks to see if all lights should be turned on or not.\r\n *	- allOnLight: Light pointer containing all OnTimes for All Lights On\r\n **/\r\nbool AllLightsOn(Light* allOnLight)\r\n{\r\n	for (int i = 0; i < allOnLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= allOnLight->Times[i].Start && DeltaTime < allOnLight->Times[i].End)\r\n		{\r\n			#ifdef DEBUG\r\n			if (allOnLight->State == OFF) \r\n			{\r\n				Serial.println(\"Turning all lights ON.\");\r\n			}\r\n			allOnLight->State = ON;\r\n			#endif\r\n			TurnAllLights(ON);\r\n			return true;\r\n		}\r\n	}\r\n	if (bAllLightsOn)\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.println(\"Turning all lights OFF.\");\r\n		allOnLight->State = OFF;	\r\n		#endif\r\n		TurnAllLights(OFF);\r\n	}\r\n	return false;\r\n}\r\n";
+	outputString << "/** Checks to see if all lights should be turned on or not.\r\n *	- allOnLight: Light pointer containing all OnTimes for All Lights On\r\n **/\r\nbool AllLightsOn(Light* allOnLight)\r\n{\r\n	for (int i = 0; i < allOnLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "(allOnLight->Times[i].Start * 100)" : "allOnLight->Times[i].Start" ) << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "(allOnLight->Times[i].End * 100)" : "allOnLight->Times[i].End" ) << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (allOnLight->State == OFF) \r\n			{\r\n				Serial.println(\"Turning all lights ON.\");\r\n			}\r\n			allOnLight->State = ON;\r\n			#endif\r\n			TurnAllLights(ON);\r\n			return true;\r\n		}\r\n	}\r\n	if (bAllLightsOn)\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.println(\"Turning all lights OFF.\");\r\n		allOnLight->State = OFF;	\r\n		#endif\r\n		TurnAllLights(OFF);\r\n	}\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;	
 
 	// All Lights Off
-	outputString << "/** Checks to see if all lights should be turned off or not. This function only sends ALL OFF command once per instance.\r\n *	- allOffLight: Light pointer containing all OnTimes for All Lights Off\r\n **/\r\nbool AllLightsOff(Light* allOffLight)\r\n{\r\n	for (int i = 0; i < allOffLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= allOffLight->Times[i].Start && DeltaTime < allOffLight->Times[i].End)\r\n		{\r\n			#ifdef DEBUG\r\n			Serial.println(\"Turning all lights OFF.\");\r\n			#endif\r\n			TurnAllLights(OFF);\r\n			allOffLight->Times[i].End = 0;\r\n			return true;\r\n		}\r\n	}\r\n	return false;\r\n}\r\n";
+	outputString << "/** Checks to see if all lights should be turned off or not. This function only sends ALL OFF command once per instance.\r\n *	- allOffLight: Light pointer containing all OnTimes for All Lights Off\r\n **/\r\nbool AllLightsOff(Light* allOffLight)\r\n{\r\n	for (int i = 0; i < allOffLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "(allOffLight->Times[i].Start * 100)" : "allOffLight->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "(allOffLight->Times[i].End * 100)" : "allOffLight->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			Serial.println(\"Turning all lights OFF.\");\r\n			#endif\r\n			TurnAllLights(OFF);\r\n			allOffLight->Times[i].End = 0;\r\n			return true;\r\n		}\r\n	}\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;
 
 	// Find Light
@@ -1453,8 +1458,8 @@ std::string GenerateCode()
 	outputString << "\r\n	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n";
 
 	if (!Options.mp3VolumePin.empty())
-		outputString << "digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
-	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= routines[CurrentRoutine]->RoutineTime);\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = routines[CurrentRoutine]->RoutineTime;\r\n";
+		outputString << "		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
+	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "(routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
 	if (Options.bUseHalloweenMP3Controls) {
 		outputString << "	digitalWrite(MP3SkipPin, LOW);\r\n";
 	}

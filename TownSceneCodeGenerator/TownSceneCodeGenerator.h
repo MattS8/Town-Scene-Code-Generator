@@ -30,6 +30,7 @@ class Light
 public:
 	std::string pin;
 	std::string onTimes;
+	std::string onTimesLowPrecision;
 	std::string state;
 	std::string name;
 	unsigned int numberOfTimes;
