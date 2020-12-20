@@ -1253,8 +1253,11 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 		itTemp->second.onTimes.pop_back();
 		itTemp->second.onTimes.pop_back();
 		itTemp->second.onTimes.append("}");
-	}
 
+		itTemp->second.onTimesLowPrecision.pop_back();
+		itTemp->second.onTimesLowPrecision.pop_back();
+		itTemp->second.onTimesLowPrecision.append("}");
+	}
 
 	Routines.insert(std::pair<std::string, RoutineGUI>(routineGUI.routine.name, routineGUI));
 	OrderTracker.routineNames.push_back(routineGUI.routine.name);
