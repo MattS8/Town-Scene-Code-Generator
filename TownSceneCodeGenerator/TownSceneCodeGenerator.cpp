@@ -16,6 +16,8 @@
 
 #define USE_HALLOWEEN_CONTROLS 2004
 #define CLEAR_LOG 2005
+#define USE_LOW_PRECISION_TIMES 2006
+
 #define PRETTY_PRINT 5
 #define GENERATE_CODE 4
 #define CREATE_ROUTINE 7
@@ -70,6 +72,7 @@ HWND hUseHalloweenMP3Controls;
 HWND hAllLightsOnBlock;
 HWND hTrainResetDuration;
 HWND hClearLog;
+HWND hUseLowPrecisionTimes;
 
 
 HWND hcbA[6];
@@ -407,6 +410,8 @@ void WriteCodeToArduino(bool uploadDirectly)
 			: L"arduino C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino";
 
 		::CreateProcess(0, (LPWSTR)command.c_str(), NULL, NULL, TRUE, CREATE_DEFAULT_ERROR_MODE, NULL, NULL, &SI, &PI);
+		::CloseHandle(PI.hProcess);
+		::CloseHandle(PI.hThread);
 
 		if (uploadDirectly) {
 			OutputLogStr.append("> ---- Sent code ");
@@ -416,7 +421,6 @@ void WriteCodeToArduino(bool uploadDirectly)
 				OutputLogStr.append("to device!");
 			OutputLogStr.append(" ----\r\n");
 		}
-
 		else
 			OutputLogStr.append("> ---- Successfully created .ino file at: 'C:\\temp\\TownSceneCodeGenerator\\TownSceneCodeGenerator.ino' ----\r\n");
 
@@ -585,12 +589,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				break;
 			case UPLOAD_TO_MP3:
 				Options.bUploadToMp3 = !Options.bUploadToMp3;
-				CheckDlgButton(hWnd, wmId, Options.bUploadToMp3 ? BST_CHECKED : BST_UNCHECKED);
+				
 				break;
 			case CLEAR_LOG:
 				OutputLogStr = "";
 				SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 				break;
+			case USE_LOW_PRECISION_TIMES:
+				Options.bUseLowPrecisionTimes = !Options.bUseLowPrecisionTimes;
+				CheckDlgButton(hWnd, wmId, Options.bUseLowPrecisionTimes ? BST_CHECKED : BST_UNCHECKED);
             default:
 				if		(wmId >= USE_LIGHT && wmId <= USE_LIGHT + 18)					CheckSelectedPin(wmId, hWnd);
 				else if (wmId >= MOVE_ROUTINE_DOWN && wmId <= MOVE_ROUTINE_DOWN_END)	MoveRoutine(wmId, DOWN);
@@ -809,158 +816,168 @@ void AddControls(HWND handler)
 	}
 
 	hwdHandler = handler;
+
+	int HeaderRowHeights[4];
+	int OptionsRowHeight[7];
+
+	HeaderRowHeights[0] = 7;
+	OptionsRowHeight[0] = HeaderRowHeights[0] + 25;
+	OptionsRowHeight[1] = OptionsRowHeight[0] + 35;
+	OptionsRowHeight[2] = OptionsRowHeight[1] + 35;
+	HeaderRowHeights[1] = OptionsRowHeight[2] + 40;
+	OptionsRowHeight[3] = HeaderRowHeights[1] + 25;
+	HeaderRowHeights[2] = OptionsRowHeight[3] + 40;
+	OptionsRowHeight[4] = HeaderRowHeights[2] + 25;
+	OptionsRowHeight[5] = OptionsRowHeight[4] + 25;
+	HeaderRowHeights[3] = OptionsRowHeight[5] + 55;
+	OptionsRowHeight[6] = HeaderRowHeights[3] + 25;
+
+
+	int ColumSpace = 10;
+	int ItemHeight = 25;
+	int HeaderHeight = 20;
+	int LabelHeight = 20;
+	int InputHeight = 20;
+
+	int NextItemW = 0;
+
+
 	int cbHeight = 20;
 	int secondColumnStart = RoutineWidth + (RoutineBtnWidth*3) + 75;
-	int reqFielsLen = 125;
+	int reqFielsLen = 105;
 	int pinEditWidth = 35;
-	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + 30;
+	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + 60;
 	int directUploadOptionsYPos = 150 + 55 + 70;
-	//CreateWindowW(L"Static", L"", WS_VISIBLE | WS_CHILD, 5, 7, width, 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, 7, secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 7, 175, 20, handler, NULL, NULL, NULL);
-	hPrettyPrintBox = CreateWindowW(L"Button", L"Pretty Print", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart, 35, 100, 30, handler, (HMENU)PRETTY_PRINT, NULL, NULL);
-	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110, 35, 175, 30, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
-	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175, 35, 205, 30, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);
-	hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175 + 200, 35, 175, 30, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
-	hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, secondColumnStart + 110 + 175 + 200 + 175, 35, 225, 30, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
-	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
-	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
-	CreateWindowW(L"Static", L"Required Fields: ", WS_VISIBLE | WS_CHILD, secondColumnStart, 150, reqFielsLen, 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, 150, 125, 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, 150, 150, 20, handler, (HMENU)SELECT_ALL, NULL, NULL);
-	CreateWindowW(L"Static", L"MP3 Upload Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos, reqFielsLen + 30, 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Drive Letter: ", WS_VISIBLE | WS_CHILD, secondColumnStart, directUploadOptionsYPos + 30, 140, 20, handler, NULL, NULL, NULL);
-	hMP3DriveLetter = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, directUploadOptionsYPos + 30, pinEditWidth, 20, handler,
-		NULL, NULL, NULL);
+
+	// HEADERS
+
+	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 175, HeaderHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Optional Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[1], 100, HeaderHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Required Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[2], reqFielsLen, HeaderHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, HeaderRowHeights[2], 125, HeaderHeight, handler, NULL, NULL, NULL);
+
+	// OPTIONS ROW 1
+	NextItemW = secondColumnStart;
+	hPrettyPrintBox = CreateWindowW(L"Button", L"Pretty Print", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 100, ItemHeight, handler, (HMENU)PRETTY_PRINT, NULL, NULL);
+	NextItemW += 100 + ColumSpace;
+	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 175, ItemHeight, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
+	NextItemW += 175 + ColumSpace;
+	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 205, ItemHeight, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);
+
+	// OPTIONS ROW 2
+	NextItemW = secondColumnStart;
+	hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 145, ItemHeight, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
+	NextItemW += 145 + ColumSpace;
+	hUseLowPrecisionTimes = CreateWindowW(L"Button", L"Use Low Percision Times", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 190, ItemHeight, handler, (HMENU)USE_LOW_PRECISION_TIMES, NULL, NULL);
+	NextItemW += 190 + ColumSpace;
+	hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 225, ItemHeight, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
+	
+	
+
+	// Options ROW 3
+	NextItemW = secondColumnStart;
+	CreateWindowW(L"Static", L"All Lights On Intialize Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 210, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 210;
+	hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += 55 + ColumSpace;
+	CreateWindowW(L"Static", L"Train Initialize Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 165, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 165;
+	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
+
+
+	// OPTIONS ROW 4
+	NextItemW = secondColumnStart;
+	CreateWindowW(L"Static", L"Motion Sensor Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 130, LabelHeight,handler, NULL, NULL, NULL);
+	NextItemW += 130;
+	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth + ColumSpace;
+	CreateWindowW(L"Static", L"Train Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 75, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 75;
+	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
+
+	// Required Pins
+	NextItemW = secondColumnStart;
+	CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[4], 110, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 110;
+	hMP3Pin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[4], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW = secondColumnStart;
+	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[5], 85, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 110;
+	hMP3VolPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[5], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+
+	// MP3 Upload Options
+	NextItemW = secondColumnStart;
+	CreateWindowW(L"Static", L"MP3 Upload Options: ", WS_VISIBLE | WS_CHILD, NextItemW, HeaderRowHeights[3], 145, LabelHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Drive Letter: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[6], 140, LabelHeight, handler, NULL, NULL, NULL);
+	hMP3DriveLetter = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, OptionsRowHeight[6], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+
+	// Used Light Pins
+	CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, HeaderRowHeights[2], 150, LabelHeight, handler, (HMENU)SELECT_ALL, NULL, NULL);
 	for (i = 0; i < 6; i++)
 	{
 		std::wostringstream os2;
 		os2 << "A" << i;
-		hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX, 
-			thirdColumnStart + 70, 
-			150 + cbHeight + (cbHeight * i), 
-			47, 
-			20, 
+		hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
+			thirdColumnStart + 70,
+			OptionsRowHeight[4] + (cbHeight * i),
+			47,
+			20,
 			handler, (HMENU)(USE_LIGHT + i), NULL, NULL);
 	}
 	for (i = 0; i < 12; i++)
 	{
 		std::wostringstream os;
 		os << "D" << (i + 2);
-		hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX, 
-			thirdColumnStart, 
-			150 + cbHeight + (cbHeight * i), 
-			47, 
-			20, 
-			handler, (HMENU)(USE_LIGHT + 7+i), NULL, NULL);
+		hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
+			thirdColumnStart,
+			OptionsRowHeight[4] + (cbHeight * i),
+			47,
+			20,
+			handler, (HMENU)(USE_LIGHT + 7 + i), NULL, NULL);
 	}
-	CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart, 
-		150 + 30, 
-		105, 
-		20, 
-		handler, NULL, NULL, NULL);
-	hMP3Pin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
-		secondColumnStart + reqFielsLen, 
-		150 + 30, 
-		pinEditWidth, 
-		20, 
-		handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Motion Sensor Pin: ", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart, 
-		75, 
-		140, 
-		20, 
-		handler, NULL, NULL, NULL);
-	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
-		secondColumnStart + reqFielsLen, 
-		75, 
-		pinEditWidth, 
-		20,
-		handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Train Pin: ", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart + pinEditWidth + 140, 
-		75, 
-		100, 
-		20, 
-		handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Train Reset Duration: ", WS_VISIBLE | WS_CHILD,
-		secondColumnStart + pinEditWidth + 140,
-		108,
-		145,
-		20,
-		handler, NULL, NULL, NULL);
-	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER,
-		secondColumnStart + pinEditWidth + 140 + 150,
-		108,
-		pinEditWidth*2,
-		20,
-		handler, NULL, NULL, NULL);
-	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
-		secondColumnStart + reqFielsLen + pinEditWidth + 85,
-		75, 
-		pinEditWidth, 
-		20, 
-		handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"All Lights On Block (ms): ", WS_VISIBLE | WS_CHILD,
-		secondColumnStart + reqFielsLen + pinEditWidth + 85 + pinEditWidth + 10,
-		75,
-		175,
-		20,
-		handler, NULL, NULL, NULL);
-	hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER,
-		secondColumnStart + reqFielsLen + pinEditWidth + 85 + pinEditWidth + 10 + 170,
-		75,
-		pinEditWidth*2,
-		20,
-		handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart, 
-		150 + 55, 
-		105, 
-		20, 
-		handler, NULL, NULL, NULL);
-	hMP3VolPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, 
-		secondColumnStart + reqFielsLen, 
-		150 + 55, 
-		pinEditWidth, 
-		20, 
-		handler, NULL, NULL, NULL);
 
-	int bottomStart = 150 + cbHeight + (cbHeight * i) + 25;
+	// ROUTINES GUI
+
+	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
+	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
+	
+
+	int bottomStart = OptionsRowHeight[4] + (cbHeight * i) + 25;
+	int bottomColumStart = secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2);
 	CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2), 
+		bottomColumStart,
 		bottomStart, 
 		200, 
 		35, 
 		handler, (HMENU)GENERATE_CODE, NULL, NULL);
 	CreateWindowW(L"Button", L"Create .ino File", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2) + 210, 
+		bottomColumStart + 210,
 		bottomStart, 
 		200, 
 		35, 
 		handler, (HMENU)WRITE_TO_ARDUINO, NULL, NULL);
 	CreateWindowW(L"Button", L"Upload to Device(s)", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2) + 210 + 210,
+		bottomColumStart + 210 + 210,
 		bottomStart, 
 		150, 35, 
 		handler, (HMENU)UPLOAD_CODE, NULL, NULL);
 	CreateWindowW(L"Static", L"Output Log: ", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart, 
+		bottomColumStart,
 		bottomStart + 45, 
-		secondColumnStart - 25, 
+		950,
 		20, 
 		handler, NULL, NULL, NULL);
 	hClearLog = CreateWindowW(L"Button", L"Clear  (X)", WS_VISIBLE | WS_CHILD, 
-		secondColumnStart + 100,
+		bottomColumStart + 100,
 		bottomStart + 45,
 		200,
 		20,
 		handler, (HMENU)CLEAR_LOG, NULL, NULL);
 	hOutputLog = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL | ES_WANTRETURN | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_MULTILINE | ES_READONLY,
-		secondColumnStart, 
+		bottomColumStart,
 		bottomStart + 65, 
-		(secondColumnStart)-25, 
+		950, 
 		height - (bottomStart + 65),
 		handler, NULL, NULL, NULL);
 }

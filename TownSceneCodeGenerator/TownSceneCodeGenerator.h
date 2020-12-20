@@ -102,6 +102,7 @@ public:
 	bool bSwapOnOffValues = false;								// Should a "turn light on" command write LOW instead of HIGH?
 	bool bUploadToMp3 = false;									// Should upload mp3 songs to the MP3 player
 	bool bUseHalloweenMP3Controls = false;						// Should use legacy mp3 control scheme (simply power MP3 On to play, off to stop playing)
+	bool bUseLowPrecisionTimes = false;							// Should use unsigned ints instead of unsigned longs for time stores
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player
