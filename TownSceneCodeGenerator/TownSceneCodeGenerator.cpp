@@ -1393,7 +1393,7 @@ std::string GenerateCode()
 		if (Options.bPrettyPrint)
 			outputString << "\r\n";
 
-		osRoutineArray << "&" << itRoutines->second.routine.name << comma;
+		osRoutineArray << "&" << itRoutines->second.routine.name << comma;	
 	}
 
 	outputString << "#define NUM_ROUTINES " << Routines.size() << "\r\n";
@@ -1406,7 +1406,7 @@ std::string GenerateCode()
 	}
 
 	// Check Light
-	outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Wheter the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "(light->Times[i].Start * 100)" :  "light->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "(light->Times[i].End * 100)" : "light->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
+	outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Wheter the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)light->Times[i].Start * 100)" :  "light->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)light->Times[i].End * 100)" : "light->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;
 
 	if (!Options.bUseHalloweenMP3Controls) {
@@ -1420,11 +1420,11 @@ std::string GenerateCode()
 	outputString << extraLine;
 
 	// All Lights On 
-	outputString << "/** Checks to see if all lights should be turned on or not.\r\n *	- allOnLight: Light pointer containing all OnTimes for All Lights On\r\n **/\r\nbool AllLightsOn(Light* allOnLight)\r\n{\r\n	for (int i = 0; i < allOnLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "(allOnLight->Times[i].Start * 100)" : "allOnLight->Times[i].Start" ) << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "(allOnLight->Times[i].End * 100)" : "allOnLight->Times[i].End" ) << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (allOnLight->State == OFF) \r\n			{\r\n				Serial.println(\"Turning all lights ON.\");\r\n			}\r\n			allOnLight->State = ON;\r\n			#endif\r\n			TurnAllLights(ON);\r\n			return true;\r\n		}\r\n	}\r\n	if (bAllLightsOn)\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.println(\"Turning all lights OFF.\");\r\n		allOnLight->State = OFF;	\r\n		#endif\r\n		TurnAllLights(OFF);\r\n	}\r\n	return false;\r\n}\r\n";
+	outputString << "/** Checks to see if all lights should be turned on or not.\r\n *	- allOnLight: Light pointer containing all OnTimes for All Lights On\r\n **/\r\nbool AllLightsOn(Light* allOnLight)\r\n{\r\n	for (int i = 0; i < allOnLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)allOnLight->Times[i].Start * 100)" : "allOnLight->Times[i].Start" ) << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)allOnLight->Times[i].End * 100)" : "allOnLight->Times[i].End" ) << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (allOnLight->State == OFF) \r\n			{\r\n				Serial.println(\"Turning all lights ON.\");\r\n			}\r\n			allOnLight->State = ON;\r\n			#endif\r\n			TurnAllLights(ON);\r\n			return true;\r\n		}\r\n	}\r\n	if (bAllLightsOn)\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.println(\"Turning all lights OFF.\");\r\n		allOnLight->State = OFF;	\r\n		#endif\r\n		TurnAllLights(OFF);\r\n	}\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;	
 
 	// All Lights Off
-	outputString << "/** Checks to see if all lights should be turned off or not. This function only sends ALL OFF command once per instance.\r\n *	- allOffLight: Light pointer containing all OnTimes for All Lights Off\r\n **/\r\nbool AllLightsOff(Light* allOffLight)\r\n{\r\n	for (int i = 0; i < allOffLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "(allOffLight->Times[i].Start * 100)" : "allOffLight->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "(allOffLight->Times[i].End * 100)" : "allOffLight->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			Serial.println(\"Turning all lights OFF.\");\r\n			#endif\r\n			TurnAllLights(OFF);\r\n			allOffLight->Times[i].End = 0;\r\n			return true;\r\n		}\r\n	}\r\n	return false;\r\n}\r\n";
+	outputString << "/** Checks to see if all lights should be turned off or not. This function only sends ALL OFF command once per instance.\r\n *	- allOffLight: Light pointer containing all OnTimes for All Lights Off\r\n **/\r\nbool AllLightsOff(Light* allOffLight)\r\n{\r\n	for (int i = 0; i < allOffLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)allOffLight->Times[i].Start * 100)" : "allOffLight->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)allOffLight->Times[i].End * 100)" : "allOffLight->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			Serial.println(\"Turning all lights OFF.\");\r\n			#endif\r\n			TurnAllLights(OFF);\r\n			allOffLight->Times[i].End = 0;\r\n			return true;\r\n		}\r\n	}\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;
 
 	// Find Light
@@ -1462,7 +1462,7 @@ std::string GenerateCode()
 
 	if (!Options.mp3VolumePin.empty())
 		outputString << "		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
-	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "(routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
+	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "((ulong)routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
 	if (Options.bUseHalloweenMP3Controls) {
 		outputString << "	digitalWrite(MP3SkipPin, LOW);\r\n";
 	}
