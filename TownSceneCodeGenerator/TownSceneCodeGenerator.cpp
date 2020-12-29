@@ -73,6 +73,7 @@ HWND hAllLightsOnBlock;
 HWND hTrainResetDuration;
 HWND hClearLog;
 HWND hUseLowPrecisionTimes;
+HWND hRandomSeedPin;
 
 
 HWND hcbA[6];
@@ -553,6 +554,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
+				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
 				if (RequiredFieldsFilled())
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_VIEWCODE), hWnd, GenerateCodeCB);
 				else
@@ -566,6 +568,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
+				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
 				if (RequiredFieldsFilled())
 					WriteCodeToArduino(FALSE);
 				else
@@ -579,6 +582,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
+				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
 				if (RequiredFieldsFilled())
 					WriteCodeToArduino(TRUE);
 				else
@@ -773,6 +777,12 @@ bool RequiredFieldsFilled()
 {
 	bool bRequiredFieldsFilled = true;
 	
+	// Check if random seed set, but not using random routines
+	if (!Options.bRandomizeRoutineOrder && !Options.randomSeedPin.empty())
+	{
+		OutputLogStr.append("> ---- Warning: A pin was declared for random seed initialization, but the option to randomize routines was not enabled! ----\r\n");
+	}
+
 	// Need at least one routine
 	if (Routines.size() == 0) 
 	{
@@ -881,6 +891,10 @@ void AddControls(HWND handler)
 	CreateWindowW(L"Static", L"Train Initialize Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 165, LabelHeight, handler, NULL, NULL, NULL);
 	NextItemW += 165;
 	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += 55 + ColumSpace;
+	CreateWindowW(L"Static", L"Randomize Seed Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 145, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 145;
+	hRandomSeedPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
 
 	// OPTIONS ROW 4
 	NextItemW = secondColumnStart;
@@ -1439,7 +1453,10 @@ std::string GenerateCode()
 	}
 
 	// Setup
-	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
+	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n";
+	if (!Options.randomSeedPin.empty())
+		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
+	outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	if (Options.trainPinLeft.empty())
 		outputString << "	delay(7000);\r\n";
 	else

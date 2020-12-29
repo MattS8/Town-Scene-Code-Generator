@@ -110,6 +110,7 @@ public:
 	std::string mp3VolumePin = "";								// Pin used to control the volume
 	std::string trainPinLeft = "";								// Pin used to reset the train; Generates the needed code if this is not empty
 	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
+	std::string randomSeedPin = "";								// The pin to use as the initializer for random seed
 
 	unsigned long allLightsOnBlock = 0;
 	unsigned long trainResetDuration = 0;						// The duration to run the train at the beginning of each power up
