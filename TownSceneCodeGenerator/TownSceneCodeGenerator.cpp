@@ -100,10 +100,10 @@ void				AddControls(HWND  hwnd);
 void				DrawRoutineList();
 void				RemoveRoutineWindows();
 std::string			GenerateCode();
-bool				AllSelected();
-void				SelectAll(bool setTo, HWND hWnd);
+bool				AllSelected(int set);
+void				SelectAll(int set, bool setTo, HWND hWnd);
 
-bool* GetBoolCB(int id);
+bool* GetBoolCB(unsigned int id);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -275,7 +275,7 @@ bool CopySongToMp3Player(std::string mp3FilePath, std::string fileName)
 
 	// Attempt to Copy File to MP3
 	bool bErrorFlag = CopyFile((LPCWSTR)wMp3SourcePath, (LPCWSTR) wMp3DestinationPath, false);
-	delete wMp3SourcePath;
+	delete[] wMp3SourcePath;
 	if (bErrorFlag == FALSE) {
 		std::ostringstream os;
 		os << "> ---- Error: Unable to copy over " << fileName << " (Error Code: " << GetLastError() << ") ----\r\n";
@@ -507,6 +507,36 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             int wmId = LOWORD(wParam);
             switch (wmId)
             {
+			case IDM_GENERATEDCODEOPTIONS_PRETTYPRINT:
+				Options.bPrettyPrint = !Options.bPrettyPrint;
+				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_PRETTYPRINT, Options.bPrettyPrint ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case IDM_GENERATEDCODEOPTIONS_DEBUGSTATEMENTS:
+				Options.bAddDebugStatements = !Options.bAddDebugStatements;
+				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_DEBUGSTATEMENTS, Options.bAddDebugStatements ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case IDM_GENERATEDCODEOPTIONS_RANDOMIZEROUTINEORDER:
+				Options.bRandomizeRoutineOrder = !Options.bRandomizeRoutineOrder;
+				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_RANDOMIZEROUTINEORDER, Options.bRandomizeRoutineOrder ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case IDM_GENERATEDCODEOPTIONS_SWAPONOFF:
+				Options.bSwapOnOffValues = !Options.bSwapOnOffValues;
+				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_SWAPONOFF, Options.bSwapOnOffValues ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case IDM_GENERATEDCODEOPTIONS_USELOWPRECISIONTIMES:
+				Options.bUseLowPrecisionTimes = !Options.bUseLowPrecisionTimes;
+				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_USELOWPRECISIONTIMES, Options.bUseLowPrecisionTimes ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case IDM_GENERATEDCODEOPTIONS_USEHALLOWEENMP3CONTROLS:
+				Options.bUseHalloweenMP3Controls = !Options.bUseHalloweenMP3Controls;
+				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_USEHALLOWEENMP3CONTROLS, Options.bUseHalloweenMP3Controls ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case IDM_LIGHTPINS_DSELUNSEL:
+				SelectAll(1, !AllSelected(1), hWnd);
+				break;
+			case IDM_LIGHTPINS_ASELUNSEL:
+				SelectAll(2, !AllSelected(2), hWnd);
+				break;
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
@@ -588,9 +618,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				else
 					SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 				break;
-			case SELECT_ALL:
-				SelectAll(!AllSelected(), hWnd);
-				break;
 			case UPLOAD_TO_MP3:
 				Options.bUploadToMp3 = !Options.bUploadToMp3;
 				
@@ -603,7 +630,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.bUseLowPrecisionTimes = !Options.bUseLowPrecisionTimes;
 				CheckDlgButton(hWnd, wmId, Options.bUseLowPrecisionTimes ? BST_CHECKED : BST_UNCHECKED);
             default:
-				if		(wmId >= USE_LIGHT && wmId <= USE_LIGHT + 18)					CheckSelectedPin(wmId, hWnd);
+				if (wmId == IDM_LIGHTPINS_D2 || wmId == IDM_LIGHTPINS_D3 || wmId == IDM_LIGHTPINS_D4 || wmId == IDM_LIGHTPINS_D5
+					|| wmId == IDM_LIGHTPINS_D6 || wmId == IDM_LIGHTPINS_D7 || wmId == IDM_LIGHTPINS_D8 || wmId == IDM_LIGHTPINS_D9
+					|| wmId == IDM_LIGHTPINS_D10 || wmId == IDM_LIGHTPINS_D11 || wmId == IDM_LIGHTPINS_A0 || wmId == IDM_LIGHTPINS_A1
+					|| wmId == IDM_LIGHTPINS_A2 || wmId == IDM_LIGHTPINS_A3 || wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5)
+				{
+					bool* bCb = GetBoolCB(wmId);
+					*bCb = !*bCb;
+					CheckMenuItem(GetMenu(hWnd), wmId, *bCb ? MF_CHECKED : MF_UNCHECKED);
+					break;
+				}
+				else if		(wmId >= USE_LIGHT && wmId <= USE_LIGHT + 18)					CheckSelectedPin(wmId, hWnd);
 				else if (wmId >= MOVE_ROUTINE_DOWN && wmId <= MOVE_ROUTINE_DOWN_END)	MoveRoutine(wmId, DOWN);
 				else if (wmId >= MOVE_ROUTINE_UP && wmId <= MOVE_ROUTINE_UP_END)		MoveRoutine(wmId, UP);
 				else if (wmId >= DELETE_ROUTINE && wmId <= DELETE_ROUTINE_END)			DeleteRoutine(wmId);
@@ -831,9 +868,9 @@ void AddControls(HWND handler)
 	int OptionsRowHeight[7];
 
 	HeaderRowHeights[0] = 7;
-	OptionsRowHeight[0] = HeaderRowHeights[0] + 25;
-	OptionsRowHeight[1] = OptionsRowHeight[0] + 35;
-	OptionsRowHeight[2] = OptionsRowHeight[1] + 35;
+	OptionsRowHeight[0] = HeaderRowHeights[0] + 15;
+	OptionsRowHeight[1] = OptionsRowHeight[0];
+	OptionsRowHeight[2] = OptionsRowHeight[1];
 	HeaderRowHeights[1] = OptionsRowHeight[2] + 40;
 	OptionsRowHeight[3] = HeaderRowHeights[1] + 25;
 	HeaderRowHeights[2] = OptionsRowHeight[3] + 40;
@@ -861,26 +898,26 @@ void AddControls(HWND handler)
 
 	// HEADERS
 	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 175, HeaderHeight, handler, NULL, NULL, NULL);
+	//CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 175, HeaderHeight, handler, NULL, NULL, NULL);
 	CreateWindowW(L"Static", L"Optional Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[1], 100, HeaderHeight, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Required Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[2], reqFielsLen, HeaderHeight, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, HeaderRowHeights[2], 125, HeaderHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"MP3 Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[2], reqFielsLen, HeaderHeight, handler, NULL, NULL, NULL);
+	//CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, HeaderRowHeights[2], 125, HeaderHeight, handler, NULL, NULL, NULL);
 
 	// OPTIONS ROW 1
-	NextItemW = secondColumnStart;
+	/*NextItemW = secondColumnStart;
 	hPrettyPrintBox = CreateWindowW(L"Button", L"Pretty Print", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 100, ItemHeight, handler, (HMENU)PRETTY_PRINT, NULL, NULL);
 	NextItemW += 100 + ColumSpace;
 	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 175, ItemHeight, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
 	NextItemW += 175 + ColumSpace;
-	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 205, ItemHeight, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);
+	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 205, ItemHeight, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);*/
 
 	// OPTIONS ROW 2
-	NextItemW = secondColumnStart;
-	hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 145, ItemHeight, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
-	NextItemW += 145 + ColumSpace;
-	hUseLowPrecisionTimes = CreateWindowW(L"Button", L"Use Low Precision Times", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 190, ItemHeight, handler, (HMENU)USE_LOW_PRECISION_TIMES, NULL, NULL);
-	NextItemW += 190 + ColumSpace;
-	hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 225, ItemHeight, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
+	//NextItemW = secondColumnStart;
+	//hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 145, ItemHeight, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
+	//NextItemW += 145 + ColumSpace;
+	//hUseLowPrecisionTimes = CreateWindowW(L"Button", L"Use Low Precision Times", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 190, ItemHeight, handler, (HMENU)USE_LOW_PRECISION_TIMES, NULL, NULL);
+	//NextItemW += 190 + ColumSpace;
+	//hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 225, ItemHeight, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
 
 	// Options ROW 3
 	NextItemW = secondColumnStart;
@@ -923,36 +960,36 @@ void AddControls(HWND handler)
 	hMP3DriveLetter = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, OptionsRowHeight[6], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
 
 	// Used Light Pins
-	CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, HeaderRowHeights[2], 150, LabelHeight, handler, (HMENU)SELECT_ALL, NULL, NULL);
-	for (i = 0; i < 6; i++)
-	{
-		std::wostringstream os2;
-		os2 << "A" << i;
-		hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-			thirdColumnStart + 70,
-			OptionsRowHeight[4] + (cbHeight * i),
-			47,
-			20,
-			handler, (HMENU)(USE_LIGHT + i), NULL, NULL);
-	}
-	for (i = 0; i < 12; i++)
-	{
-		std::wostringstream os;
-		os << "D" << (i + 2);
-		hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-			thirdColumnStart,
-			OptionsRowHeight[4] + (cbHeight * i),
-			47,
-			20,
-			handler, (HMENU)(USE_LIGHT + 7 + i), NULL, NULL);
-	}
+	//CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, HeaderRowHeights[2], 150, LabelHeight, handler, (HMENU)SELECT_ALL, NULL, NULL);
+	//for (i = 0; i < 6; i++)
+	//{
+	//	std::wostringstream os2;
+	//	os2 << "A" << i;
+	//	hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
+	//		thirdColumnStart + 70,
+	//		OptionsRowHeight[4] + (cbHeight * i),
+	//		47,
+	//		20,
+	//		handler, (HMENU)(USE_LIGHT + i), NULL, NULL);
+	//}
+	//for (i = 0; i < 12; i++)
+	//{
+	//	std::wostringstream os;
+	//	os << "D" << (i + 2);
+	//	hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
+	//		thirdColumnStart,
+	//		OptionsRowHeight[4] + (cbHeight * i),
+	//		47,
+	//		20,
+	//		handler, (HMENU)(USE_LIGHT + 7 + i), NULL, NULL);
+	//}
 
 	// ROUTINES GUI
 	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
 	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
 	
 	// Bottom Bar
-	int bottomStart = OptionsRowHeight[4] + (cbHeight * i) + 25;
+	int bottomStart = OptionsRowHeight[4] + (cbHeight * 8) + 25;
 	int bottomColumStart = secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2);
 	CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart,
@@ -1114,6 +1151,15 @@ void ParseFiles(HDROP hDropInfo)
 // Read a WAV file and parse all cues into a further parsable format for code generation
 void ParseWavFile(std::string newFileName)
 {
+	for (int i = 0; i < 6; ++i)
+	{
+		std::ostringstream os;
+		os << "bChA[" << (i + 1) << "] = " << (bchA[i] ? "false\n" : "true\n");
+		OutputDebugStringA(os.str().c_str());
+	}
+
+	OutputDebugStringA("---------");
+
 	fileName = newFileName;
 	ReadCueListFromAudioFile(fileName);
 	std::string strCueInfo = GetCueInfo();
@@ -1173,6 +1219,15 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 		return;
 	}
 
+	for (int i = 0; i < 6; ++i)
+	{
+		std::ostringstream os;
+		os << "bChA[" << (i + 1) << "] = " << (bchA[i] ? "false\n" : "true\n");
+		OutputDebugStringA(os.str().c_str());
+	}
+
+	OutputDebugStringA("---------");
+
 	// Parse each line
 	std::map<std::string, Light>::iterator it;
 	while (std::getline(ifs, line))
@@ -1187,7 +1242,15 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 			if (ifsLine.peek() == EOF)
 				continue;
 			ifsLine >> word;
-			time1 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
+			try 
+			{
+				time1 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
+			}
+			catch (...)
+			{
+				OutputDebugStringA("Skipping tag ling after failing to find start time!\n");
+				continue;
+			}	
 
 			// Skip '-'
 			if (ifsLine.peek() == EOF)
@@ -1198,7 +1261,8 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 			if (ifsLine.peek() == EOF)
 				continue;
 			ifsLine >> word;
-			try {
+			try 
+			{
 				time2 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
 			}
 			catch (...)
@@ -1253,6 +1317,15 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 				endTime = time2;
 		}
 	}
+
+	for (int i = 0; i < 6; ++i)
+	{
+		std::ostringstream os;
+		os << "bChA[" << (i + 1) << "] = " << (bchA[i] ? "false\n" : "true\n");
+		OutputDebugStringA(os.str().c_str());
+	}
+
+	OutputDebugStringA("---------");
 
 	routineGUI.routine.endTime = endTime;
 
@@ -1473,7 +1546,17 @@ std::string GenerateCode()
 	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n";
 	if (!Options.randomSeedPin.empty())
 		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
-	outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
+	for (int i = 0; i < 6; ++i)
+		if (bchA[i])
+			outputString << "	pinMode(A" << i << ", OUTPUT);\r\n";
+
+	for (int i = 0; i < 12; ++i)
+		if (bchD[i])
+			outputString << "	pinMode(D" << (i + 2) << ", OUTPUT);\r\n";
+
+
+	//outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
+	outputString << "	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	if (Options.trainPinLeft.empty())
 		outputString << "	delay(7000);\r\n";
 	else
@@ -1515,18 +1598,18 @@ std::string GenerateCode()
 
 //---------------------------------------------------------------------------
 
-bool* GetBoolCB(int id)
+bool* GetBoolCB(unsigned int id)
 {
 	int i;
 	for (i = 0; i < 6; i++)
 	{
-		if (id == USE_LIGHT + i)
+		if (id == IDM_LIGHTPINS_A0 + i)
 			return &bchA[i];
 	}
 
 	for (i = 0; i < 12; i++)
 	{
-		if (id == USE_LIGHT + 7 + i)
+		if (id == IDM_LIGHTPINS_D2 + i)
 			return &bchD[i];
 	}
 	
@@ -1535,18 +1618,25 @@ bool* GetBoolCB(int id)
 
 //---------------------------------------------------------------------------
 
-bool AllSelected()
+bool AllSelected(int set)
 {
-	for (int i = 0; i < 6; i++)
+	// Check DPins
+	if (set == 1)
 	{
-		if (!bchA[i])
-			return false;
+		for (int x = 0; x < 12; x++)
+		{
+			if (!bchD[x])
+				return false;
+		}
 	}
-
-	for (int x = 0; x < 12; x++)
+	// Check APins
+	else
 	{
-		if (!bchD[x])
-			return false;
+		for (int i = 0; i < 6; i++)
+		{
+			if (!bchA[i])
+				return false;
+		}
 	}
 
 	return true;
@@ -1554,24 +1644,27 @@ bool AllSelected()
 
 //---------------------------------------------------------------------------
 
-void SelectAll(bool setTo, HWND hWnd)
+void SelectAll(int set, bool setTo, HWND hWnd)
 {
-	for (int i = 0; i < 6; i++)
+	// Select all DPins
+	int i;
+	if (set == 1)
 	{
-		if (&bchA[i] == &Options.bAddDebugStatements){
-			OutputLogStr.append(" GOT A MATCH ON ");
-			OutputLogStr.append(std::to_string(i));
-			OutputLogStr.append("\r\n");
-			SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+		for (i = 0; i < 10; ++i)
+		{
+			bchD[i] = setTo;
+			CheckMenuItem(GetMenu(hWnd), IDM_LIGHTPINS_D2 + i, setTo ? MF_CHECKED : MF_UNCHECKED);
+			
 		}
-		bchA[i] = setTo;
-		CheckDlgButton(hWnd, USE_LIGHT + i, setTo ? BST_CHECKED : BST_UNCHECKED);
 	}
-
-	for (int x = 0; x < 12; x++)
+	// Select all APins
+	else
 	{
-		bchD[x] = setTo;
-		CheckDlgButton(hWnd, USE_LIGHT + 7 + x, setTo ? BST_CHECKED : BST_UNCHECKED);
+		for (i = 0; i < 6; i++)
+		{
+			bchA[i] = setTo;
+			CheckMenuItem(GetMenu(hWnd), IDM_LIGHTPINS_A0 + i, setTo ? MF_CHECKED : MF_UNCHECKED);
+		}
 	}
 }
 
