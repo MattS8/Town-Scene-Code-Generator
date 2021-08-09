@@ -58,6 +58,7 @@ int width = 1300;
 int height = 1300;
 int RequiredFieldHeight = 150;
 
+HWND gHWND;
 HWND hMP3DriveLetter;
 HWND hMP3Pin;
 HWND hMotionSensorPin;
@@ -102,6 +103,8 @@ void				RemoveRoutineWindows();
 std::string			GenerateCode();
 bool				AllSelected(int set);
 void				SelectAll(int set, bool setTo, HWND hWnd);
+bool* GetBoolFromPinStr(std::string boolStr);
+unsigned int GetUIDFromPinStr(std::string pinStr);
 
 bool* GetBoolCB(unsigned int id);
 
@@ -189,6 +192,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
       CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+   gHWND = hWnd;
 
    if (!hWnd)
    {
@@ -632,8 +636,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             default:
 				if (wmId == IDM_LIGHTPINS_D2 || wmId == IDM_LIGHTPINS_D3 || wmId == IDM_LIGHTPINS_D4 || wmId == IDM_LIGHTPINS_D5
 					|| wmId == IDM_LIGHTPINS_D6 || wmId == IDM_LIGHTPINS_D7 || wmId == IDM_LIGHTPINS_D8 || wmId == IDM_LIGHTPINS_D9
-					|| wmId == IDM_LIGHTPINS_D10 || wmId == IDM_LIGHTPINS_D11 || wmId == IDM_LIGHTPINS_A0 || wmId == IDM_LIGHTPINS_A1
-					|| wmId == IDM_LIGHTPINS_A2 || wmId == IDM_LIGHTPINS_A3 || wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5)
+					|| wmId == IDM_LIGHTPINS_D10 || wmId == IDM_LIGHTPINS_D11 || wmId == IDM_LIGHTPINS_D12 || wmId == IDM_LIGHTPINS_D13
+					|| wmId == IDM_LIGHTPINS_A0 || wmId == IDM_LIGHTPINS_A1 || wmId == IDM_LIGHTPINS_A2 || wmId == IDM_LIGHTPINS_A3 
+					|| wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5)
 				{
 					bool* bCb = GetBoolCB(wmId);
 					*bCb = !*bCb;
@@ -1219,13 +1224,6 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 		return;
 	}
 
-	for (int i = 0; i < 6; ++i)
-	{
-		std::ostringstream os;
-		os << "bChA[" << (i + 1) << "] = " << (bchA[i] ? "false\n" : "true\n");
-		OutputDebugStringA(os.str().c_str());
-	}
-
 	OutputDebugStringA("---------");
 
 	// Parse each line
@@ -1293,6 +1291,13 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 				continue;
 			else
 				ifsLine >> light.pin;
+
+			bool* bch = GetBoolFromPinStr(light.pin);
+			if (bch != nullptr)
+			{
+				*bch = true;
+				CheckMenuItem(GetMenu(gHWND), GetUIDFromPinStr(light.pin), *bch ? MF_CHECKED : MF_UNCHECKED);
+			}
 
 			// Create OnTime array
 			std::ostringstream os;
@@ -1541,19 +1546,18 @@ std::string GenerateCode()
 		outputString << " *                                          Arduino Functions                                          \r\n";
 		outputString << " * ---------------------------------------------------------------------------------------------------- */\r\n";
 	}
-
+	bool* pMotionSenseBoolPin = GetBoolFromPinStr(Options.motionSensorPin);
 	// Setup
 	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n";
 	if (!Options.randomSeedPin.empty())
 		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
 	for (int i = 0; i < 6; ++i)
 		if (bchA[i])
-			outputString << "	pinMode(A" << i << ", OUTPUT);\r\n";
+			outputString << "	pinMode(A" << i << ", " << (pMotionSenseBoolPin == &(bchA[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
 
 	for (int i = 0; i < 12; ++i)
 		if (bchD[i])
-			outputString << "	pinMode(D" << (i + 2) << ", OUTPUT);\r\n";
-
+			outputString << "	pinMode(D" << (i + 2) << (pMotionSenseBoolPin == &(bchD[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
 
 	//outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	outputString << "	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
@@ -1597,6 +1601,48 @@ std::string GenerateCode()
 }
 
 //---------------------------------------------------------------------------
+
+unsigned int GetUIDFromPinStr(std::string pinStr)
+{
+	int i;
+	for (i = 0; i < 6; ++i)
+	{
+		std::ostringstream os;
+		os << "A" << i;
+		if (pinStr.compare(os.str()) == 0)
+			return IDM_LIGHTPINS_A0 + i;
+	}
+
+	for (i = 0; i < 12; ++i)
+	{
+		std::ostringstream os;
+		os << "D" << (i + 2);
+		if (pinStr.compare(os.str()) == 0)
+			return IDM_LIGHTPINS_D2 + i;
+	}
+}
+
+bool* GetBoolFromPinStr(std::string pinStr)
+{
+	int i;
+	for (i = 0; i < 6; ++i)
+	{
+		std::ostringstream os;
+		os << "A" << i;
+		if (pinStr.compare(os.str()) == 0)
+			return &bchA[i];
+	}
+
+	for (i = 0; i < 12; ++i)
+	{
+		std::ostringstream os;
+		os << "D" << (i + 2);
+		if (pinStr.compare(os.str()) == 0)
+			return &bchD[i];
+	}
+
+	return nullptr;
+}
 
 bool* GetBoolCB(unsigned int id)
 {
@@ -1650,7 +1696,7 @@ void SelectAll(int set, bool setTo, HWND hWnd)
 	int i;
 	if (set == 1)
 	{
-		for (i = 0; i < 10; ++i)
+		for (i = 0; i < 12; ++i)
 		{
 			bchD[i] = setTo;
 			CheckMenuItem(GetMenu(hWnd), IDM_LIGHTPINS_D2 + i, setTo ? MF_CHECKED : MF_UNCHECKED);
