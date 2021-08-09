@@ -1184,17 +1184,32 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 		if (ifsLine >> word && ifsLine >> word && word.compare("Basic:") == 0)
 		{
 			// Get start time string. Convert to millis if using format mm:ss.mmm
+			if (ifsLine.peek() == EOF)
+				continue;
 			ifsLine >> word;
 			time1 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
 
 			// Skip '-'
+			if (ifsLine.peek() == EOF)
+				continue;
 			ifsLine >> word; 
 			
 			// Get end time string
+			if (ifsLine.peek() == EOF)
+				continue;
 			ifsLine >> word;
-			time2 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
+			try {
+				time2 = word.find(":") != std::string::npos ? GetTimeMillis(word) : std::stol(word);
+			}
+			catch (...)
+			{
+				OutputDebugStringA("Skipping tag ling after failing to find end time!\n");
+				continue;
+			}
 
 			// Get routine name string
+			if (ifsLine.peek() == EOF)
+				continue;
 			ifsLine >> name;
 
 			// Check for existing light
@@ -1210,6 +1225,8 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 				light.pin = "P_ALL_OFF";
 			else if (name.compare("ALL_ON") == 0)
 				light.pin = "P_ALL_ON";
+			else if (ifsLine.peek() == EOF)
+				continue;
 			else
 				ifsLine >> light.pin;
 
