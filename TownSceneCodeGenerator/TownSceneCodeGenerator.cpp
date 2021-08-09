@@ -1618,7 +1618,7 @@ unsigned int GetUIDFromPinStr(std::string pinStr)
 		std::ostringstream os;
 		os << "D" << (i + 2);
 		if (pinStr.compare(os.str()) == 0)
-			return IDM_LIGHTPINS_D2 + i;
+			return i >= 10 ? (IDM_LIGHTPINS_D12 + (i-10)) : IDM_LIGHTPINS_D2 + i;
 	}
 }
 
@@ -1633,7 +1633,7 @@ bool* GetBoolFromPinStr(std::string pinStr)
 			return &bchA[i];
 	}
 
-	for (i = 0; i < 12; ++i)
+	for (i = 0; i < 10; ++i)
 	{
 		std::ostringstream os;
 		os << "D" << (i + 2);
@@ -1655,7 +1655,7 @@ bool* GetBoolCB(unsigned int id)
 
 	for (i = 0; i < 12; i++)
 	{
-		if (id == IDM_LIGHTPINS_D2 + i)
+		if (id == (i >= 10 ? (IDM_LIGHTPINS_D12 + (i-10)) : (IDM_LIGHTPINS_D2 + i)))
 			return &bchD[i];
 	}
 	
@@ -1699,7 +1699,7 @@ void SelectAll(int set, bool setTo, HWND hWnd)
 		for (i = 0; i < 12; ++i)
 		{
 			bchD[i] = setTo;
-			CheckMenuItem(GetMenu(hWnd), IDM_LIGHTPINS_D2 + i, setTo ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(GetMenu(hWnd), (i >= 10 ? (IDM_LIGHTPINS_D12 + (i - 10)) : (IDM_LIGHTPINS_D2 + i) ), setTo ? MF_CHECKED : MF_UNCHECKED);
 			
 		}
 	}
