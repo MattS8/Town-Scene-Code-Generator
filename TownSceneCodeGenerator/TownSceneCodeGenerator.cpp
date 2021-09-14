@@ -76,11 +76,12 @@ HWND hClearLog;
 HWND hUseLowPrecisionTimes;
 HWND hRandomSeedPin;
 
-
-HWND hcbA[6];
-bool bchA[6] = { false };
-HWND hcbD[12];
-bool bchD[12] = { false };
+#define NUM_A_PINS 8
+#define NUM_D_PINS 12
+bool bchA[NUM_A_PINS] = { false };
+unsigned int APinIds[NUM_A_PINS] = { IDM_LIGHTPINS_A0, IDM_LIGHTPINS_A1, IDM_LIGHTPINS_A2, IDM_LIGHTPINS_A3, IDM_LIGHTPINS_A4, IDM_LIGHTPINS_A5, IDM_LIGHTPINS_A6, IDM_LIGHTPINS_A7 };
+bool bchD[NUM_D_PINS] = { false };
+unsigned int DPinIds[NUM_D_PINS] = { IDM_LIGHTPINS_D2, IDM_LIGHTPINS_D3, IDM_LIGHTPINS_D4, IDM_LIGHTPINS_D5, IDM_LIGHTPINS_D6, IDM_LIGHTPINS_D7, IDM_LIGHTPINS_D8, IDM_LIGHTPINS_D9, IDM_LIGHTPINS_D10, IDM_LIGHTPINS_D11, IDM_LIGHTPINS_D12, IDM_LIGHTPINS_D13 };
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -633,12 +634,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			case USE_LOW_PRECISION_TIMES:
 				Options.bUseLowPrecisionTimes = !Options.bUseLowPrecisionTimes;
 				CheckDlgButton(hWnd, wmId, Options.bUseLowPrecisionTimes ? BST_CHECKED : BST_UNCHECKED);
+			case ID_LIGHTPINS_USELEGACY:
+				Options.bUseLegacyA6 = !Options.bUseLegacyA6;
+				CheckDlgButton(hWnd, wmId, Options.bUseLegacyA6 ? BST_CHECKED : BST_UNCHECKED);
+				break;
+			case ID_LIGHTPINS_USELEGACYA7:
+				Options.bUseLegacyA7 = !Options.bUseLegacyA7;
+				CheckDlgButton(hWnd, wmId, Options.bUseLegacyA7 ? BST_CHECKED : BST_UNCHECKED);
+				break;
             default:
 				if (wmId == IDM_LIGHTPINS_D2 || wmId == IDM_LIGHTPINS_D3 || wmId == IDM_LIGHTPINS_D4 || wmId == IDM_LIGHTPINS_D5
 					|| wmId == IDM_LIGHTPINS_D6 || wmId == IDM_LIGHTPINS_D7 || wmId == IDM_LIGHTPINS_D8 || wmId == IDM_LIGHTPINS_D9
 					|| wmId == IDM_LIGHTPINS_D10 || wmId == IDM_LIGHTPINS_D11 || wmId == IDM_LIGHTPINS_D12 || wmId == IDM_LIGHTPINS_D13
 					|| wmId == IDM_LIGHTPINS_A0 || wmId == IDM_LIGHTPINS_A1 || wmId == IDM_LIGHTPINS_A2 || wmId == IDM_LIGHTPINS_A3 
-					|| wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5)
+					|| wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5 || wmId == IDM_LIGHTPINS_A6)
 				{
 					bool* bCb = GetBoolCB(wmId);
 					*bCb = !*bCb;
@@ -1156,7 +1165,7 @@ void ParseFiles(HDROP hDropInfo)
 // Read a WAV file and parse all cues into a further parsable format for code generation
 void ParseWavFile(std::string newFileName)
 {
-	for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < NUM_A_PINS; ++i)
 	{
 		std::ostringstream os;
 		os << "bChA[" << (i + 1) << "] = " << (bchA[i] ? "false\n" : "true\n");
@@ -1323,7 +1332,7 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 		}
 	}
 
-	for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < NUM_A_PINS; ++i)
 	{
 		std::ostringstream os;
 		os << "bChA[" << (i + 1) << "] = " << (bchA[i] ? "false\n" : "true\n");
@@ -1406,10 +1415,10 @@ std::string GenerateCode()
 	outputString <<	"bool bAllLightsOn = false;\r\n#define bRandomizeRoutineOrder " << (Options.bRandomizeRoutineOrder ? "true" : "false") << "\r\n";
 	int numLights = 0;
 	int temp = 0;
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < NUM_A_PINS; i++)
 		if (bchA[i] && !Options.IsTrainPin(std::string("A").append(std::to_string(i))))
 			numLights++;
-	for (i = 0; i < 12; i++)
+	for (i = 0; i < NUM_D_PINS; i++)
 		if (bchD[i] && !Options.IsTrainPin(std::string("D").append(std::to_string(i+2))))
 			numLights++;
 	outputString << "#define NUM_LIGHTS " << numLights << "\r\n";
@@ -1426,6 +1435,12 @@ std::string GenerateCode()
 		outputString << "A4" << (++temp < numLights ? "," : "");
 	if (bchA[5] && !Options.IsTrainPin("A5"))
 		outputString << "A5" << (++temp < numLights ? "," : "");
+	if (!Options.bUseLegacyA6)
+		if (bchA[6] && !Options.IsTrainPin("A6"))
+			outputString << "A6" << (++temp < numLights ? "," : "");
+	if (!Options.bUseLegacyA7)
+		if (bchA[7] && !Options.IsTrainPin("A7"))
+			outputString << "A7" << (++temp < numLights ? "," : "");
 
 	if (bchD[0] && !Options.IsTrainPin("D2"))
 		outputString << "D2" << (++temp < numLights ? "," : "");
@@ -1551,16 +1566,35 @@ std::string GenerateCode()
 	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n";
 	if (!Options.randomSeedPin.empty())
 		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
-	for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < NUM_A_PINS; ++i)
+	{
+		// Skip A6 if legacy option enabled
+		if (i == 5 && Options.bUseLegacyA6)
+			continue;
+
 		if (bchA[i])
 			outputString << "	pinMode(A" << i << ", " << (pMotionSenseBoolPin == &(bchA[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
+	}
 
-	for (int i = 0; i < 12; ++i)
+	for (int i = 0; i < NUM_D_PINS; ++i)
 		if (bchD[i])
-			outputString << "	pinMode(D" << (i + 2) << (pMotionSenseBoolPin == &(bchD[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
+			outputString << "	pinMode(D" << (i + 2) << ", " << (pMotionSenseBoolPin == &(bchD[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
+
+	// Setup motion sensor pin
+	if (!Options.motionSensorPin.empty())
+		outputString << "	pinMode(" << Options.motionSensorPin << ", INPUT_PULLUP);\r\n";
+
+	// Setup skip button pin
+	if (!Options.mp3SkipPin.empty())
+		outputString << "	pinMode(" << Options.mp3SkipPin << ", OUTPUT);\r\n";
 
 	//outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
-	outputString << "	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
+	
+	if (Options.bUseLegacyA6)
+		outputString << "	pinMode(A6, INPUT);\r\n";
+	if (Options.bUseLegacyA7)
+		outputString << "	pinMode(A7, INPUT_PULLUP);\r\n";
+	outputString << "	TurnAllLights(ON);\r\n";
 	if (Options.trainPinLeft.empty())
 		outputString << "	delay(7000);\r\n";
 	else
@@ -1605,27 +1639,27 @@ std::string GenerateCode()
 unsigned int GetUIDFromPinStr(std::string pinStr)
 {
 	int i;
-	for (i = 0; i < 6; ++i)
+	for (i = 0; i < NUM_A_PINS; ++i)
 	{
 		std::ostringstream os;
 		os << "A" << i;
 		if (pinStr.compare(os.str()) == 0)
-			return IDM_LIGHTPINS_A0 + i;
+			return APinIds[i];
 	}
 
-	for (i = 0; i < 12; ++i)
+	for (i = 0; i < NUM_D_PINS; ++i)
 	{
 		std::ostringstream os;
 		os << "D" << (i + 2);
 		if (pinStr.compare(os.str()) == 0)
-			return i >= 10 ? (IDM_LIGHTPINS_D12 + (i-10)) : IDM_LIGHTPINS_D2 + i;
+			return DPinIds[i];
 	}
 }
 
 bool* GetBoolFromPinStr(std::string pinStr)
 {
 	int i;
-	for (i = 0; i < 6; ++i)
+	for (i = 0; i < NUM_A_PINS; ++i)
 	{
 		std::ostringstream os;
 		os << "A" << i;
@@ -1633,7 +1667,7 @@ bool* GetBoolFromPinStr(std::string pinStr)
 			return &bchA[i];
 	}
 
-	for (i = 0; i < 10; ++i)
+	for (i = 0; i < NUM_D_PINS; ++i)
 	{
 		std::ostringstream os;
 		os << "D" << (i + 2);
@@ -1647,15 +1681,15 @@ bool* GetBoolFromPinStr(std::string pinStr)
 bool* GetBoolCB(unsigned int id)
 {
 	int i;
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < NUM_A_PINS; i++)
 	{
-		if (id == IDM_LIGHTPINS_A0 + i)
+		if (id == APinIds[i])
 			return &bchA[i];
 	}
 
-	for (i = 0; i < 12; i++)
+	for (i = 0; i < NUM_D_PINS; i++)
 	{
-		if (id == (i >= 10 ? (IDM_LIGHTPINS_D12 + (i-10)) : (IDM_LIGHTPINS_D2 + i)))
+		if (id == DPinIds[i])
 			return &bchD[i];
 	}
 	
@@ -1669,7 +1703,7 @@ bool AllSelected(int set)
 	// Check DPins
 	if (set == 1)
 	{
-		for (int x = 0; x < 12; x++)
+		for (int x = 0; x < NUM_D_PINS; x++)
 		{
 			if (!bchD[x])
 				return false;
@@ -1678,7 +1712,7 @@ bool AllSelected(int set)
 	// Check APins
 	else
 	{
-		for (int i = 0; i < 6; i++)
+		for (int i = 0; i < NUM_A_PINS; i++)
 		{
 			if (!bchA[i])
 				return false;
@@ -1696,20 +1730,20 @@ void SelectAll(int set, bool setTo, HWND hWnd)
 	int i;
 	if (set == 1)
 	{
-		for (i = 0; i < 12; ++i)
+		for (i = 0; i < NUM_D_PINS; ++i)
 		{
 			bchD[i] = setTo;
-			CheckMenuItem(GetMenu(hWnd), (i >= 10 ? (IDM_LIGHTPINS_D12 + (i - 10)) : (IDM_LIGHTPINS_D2 + i) ), setTo ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(GetMenu(hWnd), DPinIds[i], setTo ? MF_CHECKED : MF_UNCHECKED);
 			
 		}
 	}
 	// Select all APins
 	else
 	{
-		for (i = 0; i < 6; i++)
+		for (i = 0; i < NUM_A_PINS; i++)
 		{
 			bchA[i] = setTo;
-			CheckMenuItem(GetMenu(hWnd), IDM_LIGHTPINS_A0 + i, setTo ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(GetMenu(hWnd), APinIds[i], setTo ? MF_CHECKED : MF_UNCHECKED);
 		}
 	}
 }

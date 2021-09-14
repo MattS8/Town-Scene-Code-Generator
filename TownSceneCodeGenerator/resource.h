@@ -103,6 +103,12 @@
 #define ID_LIGHTPINS_D13                32835
 #define IDM_LIGHTPINS_D12               32836
 #define IDM_LIGHTPINS_D13               32837
+#define IDM_LIGHTPINS_A6                32839
+#define ID_LIGHTPINS_USELEGACY          32841
+#define ID_LIGHTPINS_USELEGACY32842     32842
+#define ID_LIGHTPINS_USELEGACYA7        32843
+#define ID_LIGHTPINS_A7                 32844
+#define IDM_LIGHTPINS_A7                32845
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -111,7 +117,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        134
-#define _APS_NEXT_COMMAND_VALUE         32838
+#define _APS_NEXT_COMMAND_VALUE         32846
 #define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

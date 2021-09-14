@@ -104,6 +104,8 @@ public:
 	bool bUploadToMp3 = false;									// Should upload mp3 songs to the MP3 player
 	bool bUseHalloweenMP3Controls = false;						// Should use legacy mp3 control scheme (simply power MP3 On to play, off to stop playing)
 	bool bUseLowPrecisionTimes = false;							// Should use unsigned ints instead of unsigned longs for time stores
+	bool bUseLegacyA6 = false;									// Preserves unknown feature of previous versions where A6 was hardcoded to be unused INPUT
+	bool bUseLegacyA7 = false;									// Preserves unknown feature of previous versions where A7 was hardcoded to be unused INPUT_PULLUP
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player
