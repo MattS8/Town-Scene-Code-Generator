@@ -1307,6 +1307,11 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 				*bch = true;
 				CheckMenuItem(GetMenu(gHWND), GetUIDFromPinStr(light.pin), *bch ? MF_CHECKED : MF_UNCHECKED);
 			}
+			else
+			{
+				OutputDebugStringA("No pin found for tag, skipping...\n");
+				continue;
+			}
 
 			// Create OnTime array
 			std::ostringstream os;
