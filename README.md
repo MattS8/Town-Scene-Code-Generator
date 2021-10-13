@@ -1,14 +1,11 @@
 # Town Scene Code Generator
-This application automatically generates Arduino code for a Town Scene project. It works by parsing `.wav` files, looking for cue markers with specially formatted tags, and creating "routines" to control town scenes. These routines are used to generate code which will tell the Arduino how and when to cycle through the songs on an MP3 player as well as when to turn light pins on and off.
+This application automatically generates Arduino code for to control lights and music for animated town scene sets on mantle tops / tables. It works by parsing `.wav` files, looking for cue markers with specific formatted tags, and creating "routines" to control turning on and off lights within the various town scene homes based on the cue markers. These routines are used to generate code which will tell the Arduino how and when to cycle through the songs on an MP3 player as well as when to turn light pins on and off.
 
-## Hardware Used
-This program was created for use with an **Arduino Nano**. It may work for other Arduino devices, however your mileage may vary. It can also interface with any MP3 player that supports file transfer via the Windows file explorer.
+## Supported Hardware Interfacing
+This program generates code for an **Arduino Nano**. It may work for other Arduino devices, however your mileage may vary. It can also interface with any MP3 player that supports file transfer via the Windows file explorer.
 
 ## Usage
-### Declaring Used Pins
-First, you must enter the pin numbers used to control the MP3 skip and MP3 volume control. These must be entered as standard pins (i.e. `D1` or `A2`).
-
-Second, check all the boxes next to pins used to control the lights in each house. **Do not check the boxes for pins that are used for MP3 skip, volume control, train pins, etc.**.
+Drag .wav files with properly formatted tags onto the program. All recognized pins will be automatically selected for you. Then declare the pin used to start/turn on the MP3 player. If the town scene has custom pieces (such as an animated train set), declare the pin(s) and check the associated options. You will also need to declare the pin used for volumen control. 
 
 * **Important:** If your hardware turns lights on by sending a LOW value, be sure to check the `Swap On/Off Values` checkbox.
 
@@ -19,14 +16,14 @@ The program reads cue markers from `.wav` files in order to determine when to tu
 Add cue markers wherever you want to turn a light on and set the duration to whenever you want the light to turn off. For example, if you add cue markers to the beginning of each song and make the cues span the duration of the respective songs, you will effectively get lights that turn on and off with each and every song.
 
 #### Cue Marker Naming Convention
-Cue marker names must follow a strict naming convention in order for the program to understand which lights must be turned on and off. 
+Cue marker names must follow a strict naming convention in order for the program to properly parse them. 
 
 Put the name of the house (something unique) followed by a space and then the pin number for that house. For example: `SomeLight A2`. Make sure to use the same name whenever you reference that house multiple times within the same scene.
 
 Names must not be the same as a **Special Tag** (see below) nor contain spaces or special characters (such as `!,".'\][` etc...).
 
 ##### Special Tags
-The following are special names you can give to cue markers to denote certain functions:
+The following are special cue marker names that denote certain functions:
 * `ALL_ON` - Turns all light pins on (excluding train pins)
 * `ALL_OFF` - Turns all light pins off (excluding train pins)
 
