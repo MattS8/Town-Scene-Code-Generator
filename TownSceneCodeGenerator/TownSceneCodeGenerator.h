@@ -111,6 +111,7 @@ public:
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player
 	std::string mp3VolumePin = "";								// Pin used to control the volume
 	std::string trainPinLeft = "";								// Pin used to reset the train; Generates the needed code if this is not empty
+	std::string trainPinRight = "";								// Pin used to reset the train; Generates the needed code if this is not empty
 	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
 	std::string randomSeedPin = "";								// The pin to use as the initializer for random seed
 
@@ -119,7 +120,7 @@ public:
 
 	bool IsTrainPin(std::string pin)
 	{
-		return trainPinLeft.compare(pin) == 0;
+		return trainPinLeft.compare(pin) == 0 || trainPinRight.compare(pin) == 0;
 	}
 };
 

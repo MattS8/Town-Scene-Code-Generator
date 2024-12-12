@@ -68,6 +68,7 @@ HWND hRandomizeRoutineOrder;
 HWND hOutputLog;
 HWND hMP3VolPin;
 HWND hTrainLeftPin;
+HWND hTrainRightPin;
 HWND hSwapOnOffValues;
 HWND hUseHalloweenMP3Controls;
 HWND hAllLightsOnBlock;
@@ -586,6 +587,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.motionSensorPin = GetStringFromWindow(hMotionSensorPin);
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
+				Options.trainPinRight = GetStringFromWindow(hTrainRightPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
@@ -600,6 +602,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.motionSensorPin = GetStringFromWindow(hMotionSensorPin);
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
+				Options.trainPinRight = GetStringFromWindow(hTrainRightPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
@@ -614,6 +617,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.motionSensorPin = GetStringFromWindow(hMotionSensorPin);
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
+				Options.trainPinRight = GetStringFromWindow(hTrainRightPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
 				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
@@ -851,7 +855,7 @@ bool RequiredFieldsFilled()
 	}
 
 	// Need train reset duration if train pin is declared
-	if (!Options.trainPinLeft.empty() && Options.trainResetDuration == 0) {
+	if ((!Options.trainPinLeft.empty() || !Options.trainPinRight.empty()) && Options.trainResetDuration == 0) {
 		OutputLogStr.append("> ---- Error: Train Reset Duration must be set if a train pin is declared. ----\r\n");
 		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 		bRequiredFieldsFilled = false;
@@ -953,9 +957,13 @@ void AddControls(HWND handler)
 	NextItemW += 130;
 	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
 	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Train Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 75, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 75;
+	CreateWindowW(L"Static", L"Train Pin (Left to Right): ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 175, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 160;
 	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth + ColumSpace;
+	CreateWindowW(L"Static", L"Train Pin (Right to Left): ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 175, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 160;
+	hTrainRightPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
 
 	// Required Pins
 	NextItemW = secondColumnStart;
@@ -1592,6 +1600,10 @@ std::string GenerateCode()
 	// Setup skip button pin
 	if (!Options.mp3SkipPin.empty())
 		outputString << "	pinMode(" << Options.mp3SkipPin << ", OUTPUT);\r\n";
+	
+	// Setup mp3 volume pin
+	if (!Options.mp3VolumePin.empty())
+		outputString << "	pinMode(" << Options.mp3VolumePin << ", OUTPUT);\r\n";
 
 	//outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	
