@@ -109,6 +109,15 @@
 #define ID_LIGHTPINS_USELEGACYA7        32843
 #define ID_LIGHTPINS_A7                 32844
 #define IDM_LIGHTPINS_A7                32845
+#define ID_GENERATEDCODE_USENON         32846
+#define IDM_GENERATEDCODE_USENON        32847
+#define ID_GENERATEDCODE_DEBUGTRAIN     32848
+#define ID_GENERATEDCODE_DEBUG          32849
+#define ID_GENERATEDCODE_DEBUG32850     32850
+#define ID_DEBUG_TRAIN                  32851
+#define ID_DEBUG_                       32852
+#define ID_DEBUG_LIGHTS                 32853
+#define ID_DEBUG_SKIPROUTINE            32854
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -117,7 +126,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        134
-#define _APS_NEXT_COMMAND_VALUE         32846
+#define _APS_NEXT_COMMAND_VALUE         32855
 #define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

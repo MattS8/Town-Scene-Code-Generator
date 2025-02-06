@@ -7,7 +7,7 @@
 
 
 #define _CRT_SECURE_NO_WARNINGS
-
+#define SS_TRANSPARENT 0x00000100L
 #define MAX_LOADSTRING 100
 
 #define WRITE_TO_ARDUINO 2001
@@ -69,6 +69,7 @@ HWND hOutputLog;
 HWND hMP3VolPin;
 HWND hTrainLeftPin;
 HWND hTrainRightPin;
+HWND hTrainMotorPin;
 HWND hSwapOnOffValues;
 HWND hUseHalloweenMP3Controls;
 HWND hAllLightsOnBlock;
@@ -76,6 +77,9 @@ HWND hTrainResetDuration;
 HWND hClearLog;
 HWND hUseLowPrecisionTimes;
 HWND hRandomSeedPin;
+HWND hRoutineScrollContainer; // Handle to scrollable container window
+int totalRoutineHeight = 0; // Track total height of all routines
+
 
 #define NUM_A_PINS 8
 #define NUM_D_PINS 12
@@ -91,6 +95,7 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	AddRoutine(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK	GenerateCodeCB(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK 	ScrollWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 void				ParseRoutineInput(std::string input, std::string name, std::string fileName);
 void				ParseWavFile(std::string name);
@@ -219,6 +224,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 // Changes the order of the routines by moving one routine (based on the wmId) up or down
 void MoveRoutine(int wmId, int direction)
 {
+	OutputLogStr.append("> Moving routine ").append(direction == UP ? "up" : "down").append("\r\n");
+	SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
 	// Get position of routine that should be moved
 	int i = wmId - (direction == UP ? MOVE_ROUTINE_UP : MOVE_ROUTINE_DOWN);
 
@@ -492,6 +499,74 @@ void EditRoutine(int wmId)
 
 //---------------------------------------------------------------------------
 
+// Add window procedure for scroll container:
+LRESULT CALLBACK ScrollWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+		case WM_COMMAND:
+            // Forward command messages to parent window
+            return SendMessage(GetParent(hWnd), message, wParam, lParam);
+        case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hWnd, &ps);
+            EndPaint(hWnd, &ps);
+            return 0;
+        }
+
+        case WM_ERASEBKGND:
+        {
+            HDC hdc = (HDC)wParam;
+            RECT rect;
+            GetClientRect(hWnd, &rect);
+            FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW+1));
+            return 1;
+        }
+
+        case WM_VSCROLL:
+        {
+            SCROLLINFO si = {0};
+            si.cbSize = sizeof(SCROLLINFO);
+            si.fMask = SIF_ALL;
+            GetScrollInfo(hWnd, SB_VERT, &si);
+
+            int yPos = si.nPos;
+            switch (LOWORD(wParam))
+            {
+                case SB_LINEUP:
+                    si.nPos -= 30;
+                    break;
+                case SB_LINEDOWN:
+                    si.nPos += 30;
+                    break;
+                case SB_PAGEUP:
+                    si.nPos -= si.nPage;
+                    break;
+                case SB_PAGEDOWN:
+                    si.nPos += si.nPage;
+                    break;
+                case SB_THUMBTRACK:
+                    si.nPos = si.nTrackPos;
+                    break;
+            }
+
+            si.fMask = SIF_POS;
+            SetScrollInfo(hWnd, SB_VERT, &si, TRUE);
+            GetScrollInfo(hWnd, SB_VERT, &si);
+
+            if (si.nPos != yPos)
+            {
+                ScrollWindow(hWnd, 0, yPos - si.nPos, NULL, NULL);
+                UpdateWindow(hWnd);
+            }
+            return 0;
+        }
+    }
+    return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+
 //
 //  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -517,6 +592,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.bPrettyPrint = !Options.bPrettyPrint;
 				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_PRETTYPRINT, Options.bPrettyPrint ? MF_CHECKED : MF_UNCHECKED);
 				break;
+			case ID_DEBUG_TRAIN:
+				Options.bDebugTrain = !Options.bDebugTrain;
+				CheckMenuItem(GetMenu(hWnd), ID_DEBUG_TRAIN, Options.bDebugTrain ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case ID_DEBUG_LIGHTS:
+				Options.bDebugLights = !Options.bDebugLights;
+				CheckMenuItem(GetMenu(hWnd), ID_DEBUG_LIGHTS, Options.bDebugLights ? MF_CHECKED : MF_UNCHECKED);
+				break;
+			case ID_DEBUG_:
+				Options.bDebugSkipRoutine = !Options.bDebugSkipRoutine;
+				CheckMenuItem(GetMenu(hWnd), ID_DEBUG_, Options.bDebugSkipRoutine ? MF_CHECKED : MF_UNCHECKED);
+				break;
 			case IDM_GENERATEDCODEOPTIONS_DEBUGSTATEMENTS:
 				Options.bAddDebugStatements = !Options.bAddDebugStatements;
 				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_DEBUGSTATEMENTS, Options.bAddDebugStatements ? MF_CHECKED : MF_UNCHECKED);
@@ -528,7 +615,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			case IDM_GENERATEDCODEOPTIONS_SWAPONOFF:
 				Options.bSwapOnOffValues = !Options.bSwapOnOffValues;
 				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_SWAPONOFF, Options.bSwapOnOffValues ? MF_CHECKED : MF_UNCHECKED);
-				break;
+				return 0;
 			case IDM_GENERATEDCODEOPTIONS_USELOWPRECISIONTIMES:
 				Options.bUseLowPrecisionTimes = !Options.bUseLowPrecisionTimes;
 				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_USELOWPRECISIONTIMES, Options.bUseLowPrecisionTimes ? MF_CHECKED : MF_UNCHECKED);
@@ -588,8 +675,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.trainPinRight = GetStringFromWindow(hTrainRightPin);
+				Options.motorVoltagePin = GetStringFromWindow(hTrainMotorPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
-				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
+				//Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
 				if (RequiredFieldsFilled())
@@ -603,8 +691,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.trainPinRight = GetStringFromWindow(hTrainRightPin);
+				Options.motorVoltagePin = GetStringFromWindow(hTrainMotorPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
-				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
+				//Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
 				if (RequiredFieldsFilled())
@@ -618,8 +707,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Options.mp3VolumePin = GetStringFromWindow(hMP3VolPin);
 				Options.trainPinLeft = GetStringFromWindow(hTrainLeftPin);
 				Options.trainPinRight = GetStringFromWindow(hTrainRightPin);
+				Options.motorVoltagePin = GetStringFromWindow(hTrainMotorPin);
 				Options.mp3DriveLetter = GetStringFromWindow(hMP3DriveLetter);
-				Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
+				//Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
 				if (RequiredFieldsFilled())
@@ -651,7 +741,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					|| wmId == IDM_LIGHTPINS_D6 || wmId == IDM_LIGHTPINS_D7 || wmId == IDM_LIGHTPINS_D8 || wmId == IDM_LIGHTPINS_D9
 					|| wmId == IDM_LIGHTPINS_D10 || wmId == IDM_LIGHTPINS_D11 || wmId == IDM_LIGHTPINS_D12 || wmId == IDM_LIGHTPINS_D13
 					|| wmId == IDM_LIGHTPINS_A0 || wmId == IDM_LIGHTPINS_A1 || wmId == IDM_LIGHTPINS_A2 || wmId == IDM_LIGHTPINS_A3 
-					|| wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5 || wmId == IDM_LIGHTPINS_A6)
+					|| wmId == IDM_LIGHTPINS_A4 || wmId == IDM_LIGHTPINS_A5 || wmId == IDM_LIGHTPINS_A6 || wmId == IDM_LIGHTPINS_A7)
 				{
 					bool* bCb = GetBoolCB(wmId);
 					*bCb = !*bCb;
@@ -687,6 +777,52 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DROPFILES:
 		ParseFiles((HDROP) wParam);
 		break;
+	case WM_ERASEBKGND:
+	{
+		HDC hdc = (HDC)wParam;
+		RECT rect;
+		GetClientRect(hWnd, &rect);
+		FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW+1));
+		return 1;
+	}
+	// case WM_VSCROLL:
+    //     {
+    //         SCROLLINFO si = {0};
+    //         si.cbSize = sizeof(SCROLLINFO);
+    //         si.fMask = SIF_ALL;
+    //         GetScrollInfo(hWnd, SB_VERT, &si);
+
+    //         int yPos = si.nPos;
+    //         switch (LOWORD(wParam))
+    //         {
+    //             case SB_LINEUP:
+    //                 si.nPos -= 30;
+    //                 break;
+    //             case SB_LINEDOWN:
+    //                 si.nPos += 30;
+    //                 break;
+    //             case SB_PAGEUP:
+    //                 si.nPos -= si.nPage;
+    //                 break;
+    //             case SB_PAGEDOWN:
+    //                 si.nPos += si.nPage;
+    //                 break;
+    //             case SB_THUMBTRACK:
+    //                 si.nPos = si.nTrackPos;
+    //                 break;
+    //         }
+
+    //         si.fMask = SIF_POS;
+    //         SetScrollInfo(hWnd, SB_VERT, &si, TRUE);
+    //         GetScrollInfo(hWnd, SB_VERT, &si);
+
+    //         if (si.nPos != yPos)
+    //         {
+    //             ScrollWindow(hWnd, 0, yPos - si.nPos, NULL, NULL);
+    //             UpdateWindow(hWnd);
+    //         }
+    //         break;
+    //     }
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
@@ -855,11 +991,13 @@ bool RequiredFieldsFilled()
 	}
 
 	// Need train reset duration if train pin is declared
-	if ((!Options.trainPinLeft.empty() || !Options.trainPinRight.empty()) && Options.trainResetDuration == 0) {
-		OutputLogStr.append("> ---- Error: Train Reset Duration must be set if a train pin is declared. ----\r\n");
-		//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
-		bRequiredFieldsFilled = false;
-	}
+	// Update 2.0 - Train Reset Duration can be left empty in which case an average will be used based on motor readings
+	
+	//if ((!Options.trainPinLeft.empty() || !Options.trainPinRight.empty()) && Options.trainResetDuration == 0) {
+	//	OutputLogStr.append("> ---- Error: Train Reset Duration must be set if a train pin is declared. ----\r\n");
+	//	//SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+	//	bRequiredFieldsFilled = false;
+	//}
 
 	// Need pin number for the volume controls
 
@@ -868,9 +1006,27 @@ bool RequiredFieldsFilled()
 
 //---------------------------------------------------------------------------
 
+HFONT g_HeaderFont = NULL;
+HFONT g_ButtonFont = NULL;
+HFONT g_OptionsHeaderFont = NULL;
+
 // Sets up the GUI for all the options and controls of this application
 void AddControls(HWND handler)
 {
+	if (g_HeaderFont == NULL)
+	{
+		g_HeaderFont = CreateFont(20, 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+	}
+
+	if (g_ButtonFont == NULL)
+	{
+		g_ButtonFont = CreateFont(16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+	}
+	if (g_OptionsHeaderFont == NULL)
+	{
+		g_OptionsHeaderFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+	}
+
 	RECT rect;
 	int i;
 	if (GetWindowRect(handler, &rect))
@@ -886,7 +1042,7 @@ void AddControls(HWND handler)
 	int OptionsRowHeight[7];
 
 	HeaderRowHeights[0] = 7;
-	OptionsRowHeight[0] = HeaderRowHeights[0] + 15;
+	OptionsRowHeight[0] = HeaderRowHeights[0] + 20;
 	OptionsRowHeight[1] = OptionsRowHeight[0];
 	OptionsRowHeight[2] = OptionsRowHeight[1];
 	HeaderRowHeights[1] = OptionsRowHeight[2] + 40;
@@ -905,6 +1061,7 @@ void AddControls(HWND handler)
 	int InputHeight = 20;
 
 	int NextItemW = 0;
+	int NextItemH = 0;
 
 
 	int cbHeight = 20;
@@ -914,140 +1071,154 @@ void AddControls(HWND handler)
 	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + 60;
 	int directUploadOptionsYPos = 150 + 55 + 70;
 
-	// HEADERS
-	CreateWindowW(L"Static", L"Routines: ", WS_VISIBLE | WS_CHILD, 5, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
-	//CreateWindowW(L"Static", L"Generated Code Options: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 175, HeaderHeight, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Optional Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[1], 100, HeaderHeight, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"MP3 Pins: ", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[2], reqFielsLen, HeaderHeight, handler, NULL, NULL, NULL);
-	//CreateWindowW(L"Static", L"Used Light Pins: ", WS_VISIBLE | WS_CHILD, thirdColumnStart, HeaderRowHeights[2], 125, HeaderHeight, handler, NULL, NULL, NULL);
+    // Register scroll container window class
+    WNDCLASSEXW wcex = {0};
+    wcex.cbSize = sizeof(WNDCLASSEX);
+    wcex.lpfnWndProc = ScrollWndProc;  // Use your existing ScrollWndProc
+    wcex.hInstance = GetModuleHandle(NULL);
+    wcex.lpszClassName = L"SCROLLWIN";
+    RegisterClassExW(&wcex);
 
-	// OPTIONS ROW 1
-	/*NextItemW = secondColumnStart;
-	hPrettyPrintBox = CreateWindowW(L"Button", L"Pretty Print", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 100, ItemHeight, handler, (HMENU)PRETTY_PRINT, NULL, NULL);
-	NextItemW += 100 + ColumSpace;
-	hDebugBox = CreateWindowW(L"Button", L"Add Debug Statements", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 175, ItemHeight, handler, (HMENU)ADD_DEBUG_STATEMENTS, NULL, NULL);
-	NextItemW += 175 + ColumSpace;
-	hRandomizeRoutineOrder = CreateWindowW(L"Button", L"Randomize Routine Order", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[0], 205, ItemHeight, handler, (HMENU)RANDOMIZE_ORDER, NULL, NULL);*/
+	// Create Routine scrollable container window
+	hRoutineScrollContainer = CreateWindowEx(
+		WS_EX_CLIENTEDGE,
+		L"SCROLLWIN",  // Use the same class name as registered
+		L"",
+		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN,
+		5,
+		HeaderRowHeights[0] + 15 + 60,
+		RoutineWidth + (RoutineBtnWidth * 3) + 30,
+		height - 175,
+		handler,
+		NULL,
+		NULL,
+		NULL
+	);
 
-	// OPTIONS ROW 2
-	//NextItemW = secondColumnStart;
-	//hSwapOnOffValues = CreateWindowW(L"Button", L"Swap On/Off Values", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 145, ItemHeight, handler, (HMENU)SWAP_ONOFF, NULL, NULL);
-	//NextItemW += 145 + ColumSpace;
-	//hUseLowPrecisionTimes = CreateWindowW(L"Button", L"Use Low Precision Times", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 190, ItemHeight, handler, (HMENU)USE_LOW_PRECISION_TIMES, NULL, NULL);
-	//NextItemW += 190 + ColumSpace;
-	//hUseHalloweenMP3Controls = CreateWindowW(L"Button", L"Use Halloween MP3 Controls", WS_VISIBLE | WS_CHILD | BS_CHECKBOX, NextItemW, OptionsRowHeight[1], 225, ItemHeight, handler, (HMENU)USE_HALLOWEEN_CONTROLS, NULL, NULL);
+	// Routines
+	NextItemH = HeaderRowHeights[0];
+	HWND hStatic = CreateWindowW(L"Static", L"ROUTINES", WS_VISIBLE | WS_CHILD, 5, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_HeaderFont, TRUE);
+	hStatic = CreateWindowW(L"Button", L"Add", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	hStatic = CreateWindowW(L"Button", L"Clear All", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 
-	// Options ROW 3
+	// Train Options
 	NextItemW = secondColumnStart;
-	CreateWindowW(L"Static", L"All Lights On Intialize Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 210, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 210;
-	hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
+	hStatic = CreateWindowW(L"Static", L"OPTIONS", WS_VISIBLE | WS_CHILD, NextItemW, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_HeaderFont, TRUE);
+	NextItemH += 60;
+	//CreateWindowW(L"Static", L"TRAIN OPTIONS", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 120, 20, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Train Init Duration: ", WS_VISIBLE | WS_CHILD | SS_TRANSPARENT, NextItemW, NextItemH, 125, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 125;
+	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 55, InputHeight, handler, NULL, NULL, NULL);
 	NextItemW += 55 + ColumSpace;
-	CreateWindowW(L"Static", L"Train Initialize Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 165, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 165;
-	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
-	NextItemW += 55 + ColumSpace;
-	CreateWindowW(L"Static", L"Randomize Seed Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[2], 145, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 145;
-	hRandomSeedPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[2], 55, InputHeight, handler, NULL, NULL, NULL);
-
-	// OPTIONS ROW 4
-	NextItemW = secondColumnStart;
-	CreateWindowW(L"Static", L"Motion Sensor Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 130, LabelHeight,handler, NULL, NULL, NULL);
-	NextItemW += 130;
-	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Train Pin (Left to Right): ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 175, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 155;
+	hTrainLeftPin = CreateWindowW(L"Edit", L"A5", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
 	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Train Pin (Left to Right): ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 175, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 160;
-	hTrainLeftPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Train Pin (Right to Left): ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[3], 175, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 160;
-	hTrainRightPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[3], pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
+	CreateWindowW(L"Static", L"Train Pin (Right to Left): ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 175, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 155;
+	hTrainRightPin = CreateWindowW(L"Edit", L"A4", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth;
+	int HeaderCenter = secondColumnStart;/*secondColumnStart + (NextItemW - secondColumnStart - 160) / 2;*/
+	hStatic = CreateWindowW(L"Static", L"TRAIN OPTIONS:", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH-25, 160, 20, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
 
-	// Required Pins
 	NextItemW = secondColumnStart;
-	CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[4], 110, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 110;
-	hMP3Pin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[4], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
-	NextItemW = secondColumnStart;
-	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[5], 85, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 110;
-	hMP3VolPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, OptionsRowHeight[5], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
-
-	// MP3 Upload Options
-	NextItemW = secondColumnStart;
-	CreateWindowW(L"Static", L"MP3 Upload Options: ", WS_VISIBLE | WS_CHILD, NextItemW, HeaderRowHeights[3], 145, LabelHeight, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Drive Letter: ", WS_VISIBLE | WS_CHILD, NextItemW, OptionsRowHeight[6], 140, LabelHeight, handler, NULL, NULL, NULL);
-	hMP3DriveLetter = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, secondColumnStart + reqFielsLen, OptionsRowHeight[6], pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
-
-	// Used Light Pins
-	//CreateWindowW(L"Button", L"Select/Unselect All", WS_VISIBLE | WS_CHILD, thirdColumnStart + 130, HeaderRowHeights[2], 150, LabelHeight, handler, (HMENU)SELECT_ALL, NULL, NULL);
-	//for (i = 0; i < 6; i++)
-	//{
-	//	std::wostringstream os2;
-	//	os2 << "A" << i;
-	//	hcbA[i] = CreateWindowW(L"Button", os2.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-	//		thirdColumnStart + 70,
-	//		OptionsRowHeight[4] + (cbHeight * i),
-	//		47,
-	//		20,
-	//		handler, (HMENU)(USE_LIGHT + i), NULL, NULL);
-	//}
-	//for (i = 0; i < 12; i++)
-	//{
-	//	std::wostringstream os;
-	//	os << "D" << (i + 2);
-	//	hcbD[i] = CreateWindowW(L"Button", os.str().c_str(), WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-	//		thirdColumnStart,
-	//		OptionsRowHeight[4] + (cbHeight * i),
-	//		47,
-	//		20,
-	//		handler, (HMENU)(USE_LIGHT + 7 + i), NULL, NULL);
-	//}
-
-	// ROUTINES GUI
-	CreateWindowW(L"Button", L"Add Routine", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
-	CreateWindowW(L"Button", L"Clear All Routines", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
+	NextItemH += 25;
+	CreateWindowW(L"Static", L"Motor Voltage Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 125, LabelHeight, handler, NULL, NULL, NULL);
+	NextItemW += 125;
+	hTrainMotorPin = CreateWindowW(L"Edit", L"A6", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
 	
+	// MP3 Options
+	NextItemW = secondColumnStart;
+	NextItemH += 35+30;
+	CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 105, 20, handler, NULL, NULL, NULL);
+	NextItemW += 105;
+	hMP3Pin = CreateWindowW(L"Edit", L"A3", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth + ColumSpace;
+	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 83, 20, handler, NULL, NULL, NULL);
+	NextItemW += 83;
+	hMP3VolPin = CreateWindowW(L"Edit", L"A2", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth + ColumSpace;
+	CreateWindowW(L"Static", L"Windows Drive Letter: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 150, 20, handler, NULL, NULL, NULL);
+	NextItemW += 150;
+	hMP3DriveLetter = CreateWindowW(L"Edit", L"D", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth;
+	hStatic = CreateWindowW(L"Static", L"MP3 OPTIONS:", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH-20, 155, 20, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+
+	// Misc Options
+	NextItemW = secondColumnStart;
+	NextItemH += 35 + 30;
+	hStatic = CreateWindowW(L"Static", L"MISC OPTIONS:", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH - 20, 155, 20, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	//CreateWindowW(L"Static", L"\"All Lights On\" Init Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 185, 20, handler, NULL, NULL, NULL);
+	//NextItemW += 185;
+	//hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 55, InputHeight, handler, NULL, NULL, NULL);
+	//NextItemW += 55 + ColumSpace;
+	CreateWindowW(L"Static", L"Motion Sense Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 122, 20, handler, NULL, NULL, NULL);
+	NextItemW += 122;
+	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += pinEditWidth + ColumSpace;
+	CreateWindowW(L"Static", L"Randomize Seed Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 145, 20, handler, NULL, NULL, NULL);
+	NextItemW += 145;
+	hRandomSeedPin = CreateWindowW(L"Edit", L"A7", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+
 	// Bottom Bar
 	int bottomStart = OptionsRowHeight[4] + (cbHeight * 8) + 25;
 	int bottomColumStart = secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2);
-	CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
+	int outputLength = 0;
+	hStatic = CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart,
 		bottomStart, 
 		200, 
 		35, 
 		handler, (HMENU)GENERATE_CODE, NULL, NULL);
-	CreateWindowW(L"Button", L"Create .ino File", WS_VISIBLE | WS_CHILD, 
+		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	outputLength += 200;
+	hStatic = CreateWindowW(L"Button", L"Create .ino File", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart + 210,
 		bottomStart, 
 		200, 
 		35, 
 		handler, (HMENU)WRITE_TO_ARDUINO, NULL, NULL);
-	CreateWindowW(L"Button", L"Upload to Device(s)", WS_VISIBLE | WS_CHILD, 
+		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	outputLength += 210;
+	hStatic = CreateWindowW(L"Button", L"Upload to Device(s)", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart + 210 + 210,
 		bottomStart, 
 		150, 35, 
 		handler, (HMENU)UPLOAD_CODE, NULL, NULL);
-	CreateWindowW(L"Static", L"Output Log: ", WS_VISIBLE | WS_CHILD, 
+		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+		
+	outputLength += 185;
+	hStatic = CreateWindowW(L"Static", L"Output Log: ", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart,
 		bottomStart + 45, 
 		950,
 		20, 
 		handler, NULL, NULL, NULL);
+		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
 	hClearLog = CreateWindowW(L"Button", L"Clear  (X)", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart + 100,
 		bottomStart + 45,
-		200,
+		99,
 		20,
 		handler, (HMENU)CLEAR_LOG, NULL, NULL);
-	hOutputLog = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL | ES_WANTRETURN | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_MULTILINE | ES_READONLY,
+		SendMessage(hClearLog, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	hOutputLog = CreateWindowW(L"Edit", L"", 
+		WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL | 
+		ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL |
+		WS_CLIPSIBLINGS | WS_CLIPCHILDREN,  // Keep these flags
 		bottomColumStart,
 		bottomStart + 65, 
-		950, 
+		outputLength, 
 		height - (bottomStart + 150),
 		handler, NULL, NULL, NULL);
+	
 }
 
 //---------------------------------------------------------------------------
@@ -1083,6 +1254,8 @@ void DrawRoutineList()
 	int buttonPos = 0;
 	std::list<std::string>::iterator itter;
 	RoutineGUI* routineGUI;
+	int currentYPos = 5;
+	totalRoutineHeight = 1;
 	for (itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end(); ++itter, buttonPos = 0)
 	{
 		// Get routine corresponding to this current position in the list
@@ -1095,30 +1268,35 @@ void DrawRoutineList()
 		std::wstring wStr = std::wstring(tempStr.begin(), tempStr.end());
 
 		// Create windows for the routine name, and buttons to change the routine's position in the list
+		int rowHeight = (wStr.length() > 50 ? RoutineHeight * 2 : RoutineHeight);
+		int buttonYPos = (wStr.length() > 50 ? currentYPos-(RoutineHeight) : currentYPos);
 		routineGUI->title = CreateWindowW(L"Static", wStr.c_str(), WS_VISIBLE | WS_CHILD, 
 			5, 
-			45 + (RoutineHeight * i) + (i * 5), 
+			currentYPos, 
 			RoutineWidth, 
-			RoutineHeight, 
-			hwdHandler, NULL, NULL, NULL);
+			rowHeight,
+			hRoutineScrollContainer, NULL, NULL, NULL);
 		routineGUI->upButton = CreateWindowW(L"Button", L"Move Up", WS_VISIBLE | WS_CHILD, 
 			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
-			45 + (RoutineHeight * i) + (i*5), 
+			buttonYPos,
 			RoutineBtnWidth, 
 			RoutineBtnHeight, 
-			hwdHandler, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
+			hRoutineScrollContainer, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
 		routineGUI->downButton = CreateWindowW(L"Button", L"Move Down", WS_VISIBLE | WS_CHILD, 
 			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
-			45 + (RoutineHeight * i) + (i * 5), 
+			buttonYPos,
 			RoutineBtnWidth, RoutineBtnHeight, 
-			hwdHandler, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
+			hRoutineScrollContainer, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
 		//routineGUI->editButton = CreateWindowW(L"Button", L"e", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(EDIT_ROUTINE + i - 1), NULL, NULL);
 		routineGUI->deleteButton = CreateWindowW(L"Button", L"X", WS_VISIBLE | WS_CHILD, 
 			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
-			45 + (RoutineHeight * i) + (i * 5), 
-			RoutineBtnWidth, 
-			RoutineBtnHeight, 
-			hwdHandler, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
+			buttonYPos,
+			RoutineBtnWidth/2, 
+			RoutineBtnHeight,
+			hRoutineScrollContainer, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
+
+		totalRoutineHeight += 5 + rowHeight;
+		currentYPos += 5 + rowHeight;
 
 		//auto hwndEdit = LoadImage(hInst, MAKEINTRESOURCE(IDB_BITMAP1), IMAGE_BITMAP, 0, 0, LR_DEFAULTCOLOR);
 		//SendMessage(routineGUI->editButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM) hwndEdit);
@@ -1130,6 +1308,18 @@ void DrawRoutineList()
 		//SendMessage(routineGUI->upButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hwndUp);
 
 	}
+
+	totalRoutineHeight += 15;
+
+	// Set scroll info
+	SCROLLINFO si = {0};
+	si.cbSize = sizeof(SCROLLINFO);
+	si.fMask = SIF_RANGE | SIF_PAGE;
+	si.nMin = 0;
+	si.nMax = totalRoutineHeight;
+	si.nPage = height - 175; // Visible height of scroll container
+	SetScrollInfo(hRoutineScrollContainer, SB_VERT, &si, TRUE);
+
 }
 
 //---------------------------------------------------------------------------
@@ -1315,11 +1505,11 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 				*bch = true;
 				CheckMenuItem(GetMenu(gHWND), GetUIDFromPinStr(light.pin), *bch ? MF_CHECKED : MF_UNCHECKED);
 			}
-			else
-			{
-				OutputDebugStringA("No pin found for tag, skipping...\n");
-				continue;
-			}
+			//else
+			//{
+			//	OutputDebugStringA("No pin found for tag, skipping...\n");
+			//	continue;
+			//}
 
 			// Create OnTime array
 			std::ostringstream os;
@@ -1418,8 +1608,12 @@ std::string GenerateCode()
 		outputString << "#define MP3VolumePin " << Options.mp3VolumePin << "\r\n";
 	if (!Options.trainPinLeft.empty())
 		outputString << "#define TrainPin " << Options.trainPinLeft << "\r\n";
-	if (Options.bAddDebugStatements)
+	if (Options.bDebugLights)
 		outputString << "#define DEBUG\r\n";
+	if (Options.bDebugTrain)
+		outputString << "#define DEBUG_TRAIN\r\n";
+	if (Options.bDebugSkipRoutine)
+		outputString << "#define DEBUG_SKIP_ROUTINE\r\n";
 	outputString << "#define D2 2\r\n" << "#define D3 3\r\n" << "#define D4 4\r\n" << "#define D5 5\r\n" << "#define D6 6\r\n" << "#define D7 7\r\n" << "#define D8 8\r\n";
 	outputString << "#define D9 9\r\n" << "#define D10 10\r\n" << "#define D11 11\r\n" << "#define D12 12\r\n" << "#define D13 13\r\n";
 	if (Options.bPrettyPrint)
@@ -1435,6 +1629,7 @@ std::string GenerateCode()
 		if (bchD[i] && !Options.IsTrainPin(std::string("D").append(std::to_string(i+2))))
 			numLights++;
 	outputString << "#define NUM_LIGHTS " << numLights << "\r\n";
+	outputString << "#define NUM_ROUTINES " << Routines.size() << "\r\n";
 	outputString << "int AllLights[NUM_LIGHTS] = {";
 	if (bchA[0] && !Options.IsTrainPin("A0"))
 		outputString << "A0" << (++temp < numLights? "," : "");
@@ -1480,6 +1675,14 @@ std::string GenerateCode()
 	if (bchD[11] && !Options.IsTrainPin("D13"))
 		outputString << "D13";
 	outputString << "};\r\n";
+
+	// Even when not randomizing, we need these because my code is dumb
+	outputString << "bool all_used_up = false;\r\nbool used_routine[NUM_ROUTINES];\r\n";
+	
+	// Motor current variables
+	if (!Options.trainPinLeft.empty()) {
+		outputString << "uint8_t motor_current_limit = 35;\r\nuint8_t motor_current_limit_L2R = 24;\r\nuint8_t motor_current_limit_R2L = 24;\r\n";
+	}
 
 	// NEW CODE GENERATED
 	outputString << "ulong StartTime = 0, DeltaTime = 0;\r\nint CurrentRoutine = 0;\r\n" << extraLine;
@@ -1533,7 +1736,6 @@ std::string GenerateCode()
 		osRoutineArray << "&" << itRoutines->second.routine.name << comma;	
 	}
 
-	outputString << "#define NUM_ROUTINES " << Routines.size() << "\r\n";
 	std::string routinesString = OrderTracker.getRoutinesString(Options.bUseHalloweenMP3Controls);
 	outputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesString << "};\r\n" << extraLine; //CHECK  THIS
 
@@ -1543,12 +1745,123 @@ std::string GenerateCode()
 	}
 
 	// Check Light
-	outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Wheter the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)light->Times[i].Start * 100)" :  "light->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)light->Times[i].End * 100)" : "light->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
+	outputString << "/** \r\n"
+		<< " * Turns a light on if DeltaTime is within one of the light's \"on times\". \r\n"
+		<< " * Otherwise, the light is turned off.\r\n"
+		<< " *   - light: The light to check\r\n"
+		<< " *   Returns: Whether the light was turned on\r\n"
+		<< " **/\r\n"
+		<< "bool CheckLight(Light* light)\r\n"
+		<< "{\r\n"
+		<< "    int i;\r\n"
+		<< "    for (i = 0; i < light->NumberOfOnTimes; i++)\r\n"
+		<< "    {\r\n"
+		<< "        if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n"
+		<< "            return false;\r\n"
+		<< "        if (DeltaTime >= "
+		<< (Options.bUseLowPrecisionTimes
+			? "((ulong)light->Times[i].Start * 100)"
+			: "light->Times[i].Start")
+		<< " && DeltaTime < "
+		<< (Options.bUseLowPrecisionTimes
+			? "((ulong)light->Times[i].End * 100)"
+			: "light->Times[i].End")
+		<< ")\r\n"
+		<< "        {\r\n"
+		<< "            #ifdef DEBUG\r\n"
+		<< "            if (light->State == OFF) \r\n"
+		<< "            {\r\n"
+		<< "                Serial.print(\"Turning on light : \");\r\n"
+		<< "                Serial.println(light->Pin);\r\n"
+		<< "            }\r\n"
+		<< "            light->State = ON;\r\n"
+		<< "            #endif\r\n"
+		<< "            digitalWrite(light->Pin, ON);\r\n"
+		<< "            return true;\r\n"
+		<< "        }\r\n"
+		<< "    }\r\n"
+		<< "    digitalWrite(light->Pin, OFF);\r\n"
+		<< "\r\n"
+		<< "    #ifdef DEBUG\r\n"
+		<< "    if (light->State == ON)\r\n"
+		<< "    {\r\n"
+		<< "        Serial.print(\"Turning off light : \");\r\n"
+		<< "        Serial.println(light->Pin);\r\n"
+		<< "    }\r\n"
+		<< "    light->State = OFF;\r\n"
+		<< "    #endif\r\n"
+		<< "    return false;\r\n"
+		<< "}\r\n";
+	//outputString << "/** Turns a light on if DeltaTime is within one of the light's \"on times\". Otherwise, the light\r\n *  is turned off.\r\n *   - light: The light to check\r\n *   Returns: Whether the light was turned on\r\n **/\r\nbool CheckLight(Light* light)\r\n{\r\n	int i;\r\n	for (i = 0; i < light->NumberOfOnTimes; i++)\r\n	{\r\n		if (light->Pin == P_ALL_OFF || light->Pin == P_ALL_ON)\r\n		return false;\r\n		if (DeltaTime >= "
+	//	<< (Options.bUseLowPrecisionTimes 
+	//		? "((ulong)light->Times[i].Start * 100)" 
+	//		:  "light->Times[i].Start") << " && DeltaTime < " 
+	//	<< (Options.bUseLowPrecisionTimes 
+	//		? "((ulong)light->Times[i].End * 100)" 
+	//		: "light->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (light->State == OFF) \r\n			{\r\n				Serial.print(\"Turning on light : \");\r\n				Serial.println(light->Pin);\r\n			}\r\n			light->State = ON;\r\n			#endif\r\n			digitalWrite(light->Pin, ON);\r\n			return true;\r\n		}\r\n	}\r\n	digitalWrite(light->Pin, OFF);\r\n\r\n	#ifdef DEBUG\r\n	if (light->State == ON)\r\n	{\r\n		Serial.print(\"Turning off light : \");\r\n		Serial.println(light->Pin);\r\n	}\r\n	light->State = OFF;\r\n	#endif\r\n	return false;\r\n}\r\n";
 	outputString << extraLine;
 
 	if (!Options.bUseHalloweenMP3Controls) {
 		// Skip To Routine
-		outputString << "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n * 	track to the desired track.\r\n *   Returns: array position of next routine\r\n **/\r\nint SkipToRoutine()\r\n{\r\n	int nextRoutine = bRandomizeRoutineOrder \r\n		? CurrentRoutine \r\n		: CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n	int numberOfSkips = 1;\r\n	if(bRandomizeRoutineOrder && NUM_ROUTINES > 1)\r\n	{\r\n		while (nextRoutine == CurrentRoutine)\r\n			nextRoutine = random(0, NUM_ROUTINES);\r\n		numberOfSkips = nextRoutine < CurrentRoutine\r\n			? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n			: nextRoutine - CurrentRoutine;\r\n		#ifdef DEBUG\r\n		Serial.print(\"Current routine :\"); \r\n		Serial.println(CurrentRoutine); \r\n		Serial.print(\"Routine \");\r\n		Serial.print(nextRoutine);\r\n		Serial.print(\" selected(skipping \");\r\n		Serial.print(numberOfSkips);\r\n		Serial.println(\" times)\");\r\n		#endif\r\n	}\r\n	for (int i = 0; i < numberOfSkips; i++)\r\n	{\r\n		digitalWrite(MP3SkipPin, HIGH);\r\n		delay(150);\r\n		digitalWrite(MP3SkipPin, LOW);\r\n		delay(150);\r\n	}\r\n	return nextRoutine;\r\n}\r\n";
+		outputString << "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n * 	track to the desired track.\r\n *   Returns: array position of next routine\r\n **/\r\nint SkipToRoutine()\r\n{";
+		
+		// v2.0 - new non-repeating randomization implementation
+		outputString << "    if (all_used_up) {\r\n"
+			<< "        #ifdef DEBUG_SKIP_ROUTINE\r\n"
+			<< "        Serial.print(\"all_used_up :\");\r\n"
+			<< "        Serial.println(all_used_up);\r\n"
+			<< "        #endif\r\n"
+			<< "        for (int ii = 0; ii < NUM_ROUTINES; ii++) {\r\n"
+			<< "            used_routine[ii] = false;\r\n"
+			<< "        }\r\n"
+			<< "        all_used_up = false;\r\n"
+			<< "    }\r\n"
+			<< "    int nextRoutine = bRandomizeRoutineOrder\r\n"
+			<< "        ? CurrentRoutine\r\n"
+			<< "        : CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n"
+			<< "    int numberOfSkips = 1;\r\n"
+			<< "\r\n"
+			<< "    if (bRandomizeRoutineOrder && NUM_ROUTINES > 1) {\r\n"
+			<< "        while (nextRoutine == CurrentRoutine || used_routine[nextRoutine])\r\n"
+			<< "            nextRoutine = random(0, NUM_ROUTINES);\r\n"
+			<< "        used_routine[nextRoutine] = true;\r\n"
+			<< "        numberOfSkips = nextRoutine < CurrentRoutine\r\n"
+			<< "            ? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n"
+			<< "            : nextRoutine - CurrentRoutine;\r\n"
+			<< "\r\n"
+			<< "        all_used_up = true;\r\n"
+			<< "        for (int i = 0; i < NUM_ROUTINES; i++) {\r\n"
+			<< "            if (!used_routine[i]) {\r\n"
+			<< "                all_used_up = false;\r\n"
+			<< "                break;\r\n"
+			<< "            }\r\n"
+			<< "        }\r\n"
+			<< "\r\n"
+			<< "        #ifdef DEBUG_SKIP_ROUTINE\r\n"
+			<< "        Serial.print(\"Current routine :\");\r\n"
+			<< "        Serial.println(CurrentRoutine);\r\n"
+			<< "        Serial.print(\"Routine \");\r\n"
+			<< "        Serial.print(nextRoutine);\r\n"
+			<< "        Serial.print(\" selected(skipping \");\r\n"
+			<< "        Serial.print(numberOfSkips);\r\n"
+			<< "        Serial.println(\" times)\");\r\n"
+			<< "        #endif\r\n"
+			<< "    }\r\n"
+			<< "    for (int i = 0; i < numberOfSkips; i++) {\r\n"
+			<< "		#ifdef DEBUG_SKIP_ROUTINE\r\n"
+			<< "		Serial.print(\" skipping...\");\r\n"
+			<< "		#endif\r\n"
+			<< "        digitalWrite(MP3SkipPin, HIGH);\r\n"
+			<< "        delay(150);\r\n"
+			<< "        digitalWrite(MP3SkipPin, LOW);\r\n"
+			<< "        delay(250);\r\n"
+			<< "    }\r\n"
+			<< "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
+			<< "	Serial.println(\"Done skipping!\");\r\n"
+			<< "	#endif\r\n"
+			<< "    return nextRoutine;\r\n"
+			<< "}";
+
 		outputString << extraLine;
 	}
 
@@ -1577,8 +1890,6 @@ std::string GenerateCode()
 	bool* pMotionSenseBoolPin = GetBoolFromPinStr(Options.motionSensorPin);
 	// Setup
 	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n";
-	if (!Options.randomSeedPin.empty())
-		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
 	for (int i = 0; i < NUM_A_PINS; ++i)
 	{
 		// Skip A6 if legacy option enabled
@@ -1607,44 +1918,204 @@ std::string GenerateCode()
 
 	//outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
 	
+	if (!Options.motorVoltagePin.empty())
+		outputString << "	pinMode(" << Options.motorVoltagePin << ", INPUT);\r\n";
+
+	if (!Options.randomSeedPin.empty())
+		outputString << "	pinMode(" << Options.randomSeedPin << ", INPUT);\r\n";
+
 	if (Options.bUseLegacyA6)
 		outputString << "	pinMode(A6, INPUT);\r\n";
 	if (Options.bUseLegacyA7)
 		outputString << "	pinMode(A7, INPUT_PULLUP);\r\n";
+
+	// In the event the option to "randomly select track" is checked, we'll need to initialize randomSeed
+	if (Options.bRandomizeRoutineOrder && !Options.randomSeedPin.empty())
+		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
+
 	outputString << "	TurnAllLights(ON);\r\n";
-	if (Options.trainPinLeft.empty())
+	if (!Options.trainPinLeft.empty()) {
+		const int maxTrainInit = Options.trainResetDuration <= 0 ? 20000 : Options.trainResetDuration;
+		//if (Options.trainResetDuration <= 0) {
+			// Auto-initialize train using motor avg
+		outputString << "    #ifdef DEBUG_TRAIN\r\n"
+			<< "        Serial.println(\"Resetting train to designated side...\");\r\n"
+			<< "    #endif\r\n"
+			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);      // Make sure train direction is L to R\r\n"
+			<< "    delay(250);\r\n"
+			<< "    digitalWrite(TrainPin, ON); // S/B A5\r\n"
+			<< "    delay(10);\r\n"
+			<< "    int startTime = millis();  // Record the start time\r\n"
+			<< "    int maxDuration = " << maxTrainInit << ";\r\n"
+			<< "    unsigned int time1;\r\n"
+			<< "    unsigned int time2;\r\n"
+			<< "    uint8_t motoravgmax = 0;\r\n"
+			<< "    uint8_t motoravgmin = 255;\r\n"
+			<< "    uint8_t motorAvg = 0;\r\n"
+			<< "    uint8_t motorAvg1 = 0;\r\n";
+		if (Options.bRandomizeRoutineOrder) {
+			outputString << "    for (int ii = 0; ii < NUM_ROUTINES; ii++) {  // resets used routine array to all false\r\n"
+				<< "        used_routine[ii] = false;\r\n"
+				<< "    }\r\n"
+				<< "    all_used_up = false;        // reset all routine used variable\r\n";
+		}
+		outputString << "    while ((millis() - startTime < maxDuration) && (motorAvg <= motor_current_limit)) {\r\n"
+			<< "        motorAvg = 0;\r\n"
+			<< "        motorAvg1 = 0;\r\n"
+			<< "        time1 = millis();\r\n"
+			<< "        for (int i = 0; i < 500; i++) {\r\n"
+			<< "            motorAvg1 = analogRead("<< Options.motorVoltagePin <<");\r\n"
+			<< "            motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
+			<< "            delay(1); // Small delay between readings to ensure stable sampling\r\n"
+			<< "        }\r\n"
+			<< "        time2 = millis() - time1;\r\n"
+			<< "\r\n"
+			<< "        #ifdef DEBUG_TRAIN\r\n"
+			<< "            Serial.print(\"Time for averaging: \");\r\n"
+			<< "            Serial.println(time2);\r\n"
+			<< "            if (motorAvg >= motoravgmax)\r\n"
+			<< "                motoravgmax = motorAvg;\r\n"
+			<< "            if (motorAvg <= motoravgmin)\r\n"
+			<< "                motoravgmin = motorAvg;\r\n"
+			<< "            Serial.print(\"Max Average Current: \");\r\n"
+			<< "            Serial.print(motoravgmax);\r\n"
+			<< "            Serial.print(\", Min Average Current: \");\r\n"
+			<< "            Serial.print(motoravgmin);\r\n"
+			<< "            Serial.print(\", Average Motor Current: \");\r\n"
+			<< "            Serial.println(motorAvg);\r\n"
+			<< "        #endif\r\n"
+			<< "    }\r\n"
+			<< "\r\n"
+			<< "    digitalWrite(TrainPin, OFF);\r\n"
+			<< "    digitalWrite(" << Options.trainPinRight << ", ON);       // Back train off the stop a bit\r\n"
+			<< "    delay(250);\r\n"
+			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "    while (millis() - startTime < maxDuration) {  // Use this remaining train initialization time for all lights on at startup\r\n"
+			<< "        delay(100);\r\n"
+			<< "    }\r\n"
+			<< "    #ifdef DEBUG_TRAIN\r\n"
+			<< "        Serial.println(\"Finished resetting train!\");\r\n"
+			<< "    #endif";
+			
+			//outputString << "	#ifdef DEBUG_TRAIN\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n"
+			//	<< "	digitalWrite(" << Options.trainPinRight << ", OFF);\r\n	delay(250);\r\n	digitalWrite(TrainPin, ON);\r\n	delay(10);\r\n"
+			//	<< "	int startTime = millis();\r\n	int maxDuration = 20000;\r\n	unsigned int time1, time2;\r\n"
+			//	<< "	uint8_t motoravgmax = 0, motoravgmin = 255, motorAvg = 0, motorAvg1 = 0;\r\n"
+			//	<< "	for (int ri = 0; ri < NUM_ROUTINES; ri++) {\r\n"
+			//	<< "		used_routine[ri] = false;\r\n"
+			//	<< "	}\r\n	all_used_up = false;\r\n"
+			//	<< "	while ((millis() - startTime < maxDuration) && (motorAvg <= motor_current_limit)) {\r\n"
+			//	<< "		motorAvg = 0;\r\n		motorAvg1 = 0;\r\n		time1 = millis();\r\n		for (int i = 0; i < 500; i++) {\r\n"
+			//	<< "			motorAvg1 = analogRead(" << Options.trainMotorPin << ");\r\n			motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
+			//	<< "			delay(1);\r\n		}\r\n		time2 = millis() - time1;\r\n\r\n		#ifdef DEBUG_TRAIN\r\n"
+			//	<< "		Serial.print(\"Time for averaging: \");\r\n		Serial.println(time2);\r\n"
+			//	<< "		motorAvg = motorAvg / 500;\r\n		if (motorAvg >= motoravgmax)\r\n			motoravgmax = motorAvg;\r\n"
+			//	<< "		if (motorAvg <= motoravgmin)\r\n			motoravgmin = motorAvg;\r\n"
+			//	<< "		Serial.print(\" , Max Average Current: \");\r\n		Serial.print(motoravgmax);\r\n		Serial.print(\" , Min Average Current: \")\r\n"
+			//	<< "		Serial.print(motoravgmin);\r\n		Serial.print(\"Average Motor Current: \");\r\n		Serial.println(motorAvg);\r\n"
+			//	<< "		#endif\r\n		}\r\n\r\n		digitalWrite(TrainPin, OFF);\r\n		digitalWrite(" << Options.trainPinRight << ", ON);\r\n"
+			//	<< "		delay(250);\r\n		digitalWrite(" << Options.trainPinRight << ", OFF);\r\n		while (millis() - startTime < maxDuration) {\r\n"
+			//	<< "			delay(100);\r\n		}\r\n		#ifdef DEBUG_TRAIN\r\n		Serial.println(\"Finished resetting train!\");\r\n		#endif\r\n";
+		//}
+		//else {
+		//	// Initialize train using hardcoded reset duration
+		//	outputString << "	#ifdef DEBUG_TRAIN\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n	digitalWrite(TrainPin, ON);\r\n	delay(" << Options.trainResetDuration << ");\r\n	digitalWrite(TrainPin, OFF);\r\n	#ifdef DEBUG\r\n	Serial.println(\"Finished resetting train!\");\r\n	#endif\r\n";
+		//}
+	}
+	else {
+		// Ignore train setup - induce 7s delay
 		outputString << "	delay(7000);\r\n";
-	else
-		outputString << "	#ifdef DEBUG\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n	digitalWrite(TrainPin, ON);\r\n	delay(" << Options.trainResetDuration << ");\r\n	digitalWrite(TrainPin, OFF);\r\n	#ifdef DEBUG\r\n	Serial.println(\"Finished resetting train!\");\r\n	#endif\r\n";
+	}
 	outputString << "	TurnAllLights(OFF);\r\n";
 	outputString << "}\r\n";
 	outputString << extraLine;
+
+	
 
 	// Loop
 	outputString << "void loop()\r\n{\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "\twhile (analogRead(PMotionSense) < 500) ;\r\n";
 	if (Options.bUseHalloweenMP3Controls) {
-		outputString << "	CurrentRoutine = 0;\r\n	digitalWrite(MP3SkipPin, HIGH);";
+		outputString << "	CurrentRoutine = 0;\r\n	digitalWrite(MP3SkipPin, HIGH);\r\n";
 	}
 	else {
-		outputString << "	CurrentRoutine = SkipToRoutine();";
+		outputString << "	CurrentRoutine = SkipToRoutine();\r\n";
 	}
-	outputString << "\r\n	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n";
+
+	// Commented out debug code
+	outputString << "/* ---------------------------------------------------------------------------------------------------- */\r\n"
+		<< "// This code is used only to force a specific routine to run.\r\n"
+		<< "// 1 skip = Set 1, Routine 1\r\n"
+		<< "    // CurrentRoutine = 1;\r\n"
+		<< "    // int numberOfSkips = 1;\r\n"
+		<< "    // for (int i = 0; i < numberOfSkips; i++)\r\n"
+		<< "    // {\r\n"
+		<< "    //     Serial.print(\" skipping...)\");\r\n"
+		<< "    //     digitalWrite(MP3SkipPin, HIGH);\r\n"
+		<< "    //     delay(150);\r\n"
+		<< "    //     digitalWrite(MP3SkipPin, LOW);\r\n"
+		<< "    //     delay(250);\r\n"
+		<< "    // }\r\n"
+		<< "    // Serial.println(\"Done skipping)\");\r\n"
+		<< "/* ---------------------------------------------------------------------------------------------------- */\r\n";
+
+	outputString << "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
+		<< "	Serial.print(\"Current Routine: \");\r\n"
+		<< "	Serial.println(CurrentRoutine);\r\n"
+		<< "	#endif\r\n";
+
+	outputString << "	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n";
 
 	if (!Options.mp3VolumePin.empty())
 		outputString << "		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
-	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n	} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "((ulong)routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
+	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n\r\n";
+	
+	// Train train motor state
+	if (!Options.trainPinLeft.empty()) {
+		outputString << "		int pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
+			<< "		int pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
+			<< "		if (pinStateR2L == HIGH || pinStateL2R == HIGH) {\r\n"
+			<< "			if (pinStateL2R == HIGH)\r\n				motor_current_limit = motor_current_limit_L2R;\r\n"
+			<< "			if (pinStateR2L == HIGH)\r\n				motor_current_limit = motor_current_limit_R2L;\r\n"
+			<< "			delay(100);\r\n			uint8_t motorAvg = 0;\r\n			uint8_t motorAvg1 = 0;\r\n"
+			<< "			for (int mi = 0; mi < 50; mi++) {\r\n"
+			<< "				motorAvg1 = analogRead(" << Options.motorVoltagePin << ");\r\n"
+			<< "				delay(1);\r\n				if (motorAvg1 >= 25) motorAvg1 = 25;\r\n"
+			<< "				motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
+			<< "			}\r\n"
+			<< "			#ifdef DEBUG_TRAIN\r\n			Serial.print(\"Average Motor Current: \");\r\n			Serial.println(motorAvg);\r\n			#endif\r\n\r\n"
+			<< "			if (motorAvg >= motor_current_limit) {\r\n"
+			<< "				pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
+			<< "				pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
+			<< "				if (pinStateL2R == HIGH) {\r\n"
+			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n					digitalWrite(" << Options.trainPinLeft << ", ON);\r\n"
+			<< "					delay(250);\r\n"
+			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n"
+			<< "					#ifdef DEBUG_TRAIN\r\n"
+			<< "					Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
+			<< "					#endif\r\n"
+			<< "					delay(2000);\r\n"
+			<< "				}\r\n"
+			<< "				if (pinStateR2L == HIGH) {\r\n"
+			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n					digitalWrite(" << Options.trainPinRight << ", ON);\r\n"
+			<< "					delay(250);\r\n"
+			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "					#ifdef DEBUG_TRAIN\r\n"
+			<< "					Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
+			<< "					#endif\r\n"
+			<< "					delay(2000);\r\n"
+			<< "				}\r\n"
+			<< "			}\r\n"
+			<< "		}";
+	}
+
+	
+	outputString << "} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "((ulong)routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
 	if (Options.bUseHalloweenMP3Controls) {
 		outputString << "	digitalWrite(MP3SkipPin, LOW);\r\n";
 	}
 
-	if (Options.allLightsOnBlock > 0) {
-		outputString << "	for (int j = 0; j < routines[CurrentRoutine]->NumberOfLights; j++)\r\n		digitalWrite(routines[CurrentRoutine]->Lights[j]->Pin, ON);\r\n";
-		outputString << "	delay(" << Options.allLightsOnBlock << ");\r\n";
-		outputString << "	for (int j = 0; j < routines[CurrentRoutine]->NumberOfLights; j++)\r\n		digitalWrite(routines[CurrentRoutine]->Lights[j]->Pin, OFF);\r\n";
-		outputString << "	delay(200);\r\n";
-	}
 	outputString << "}\r\n";
 	outputString << extraLine;
 

@@ -99,6 +99,9 @@ class GenerationOptions
 public:
 	bool bPrettyPrint = false;									// Should generated code be properly spaced and easier to read?
 	bool bAddDebugStatements = false;							// #Defines DEBUG in generated code, causing Arduino to print out some helpful debug statements
+	bool bDebugTrain = false;									// Adds debug statements to generated code to debug train pin functionality (added in v2.0)
+	bool bDebugSkipRoutine = false;								// Adds debug statements to generated code to debug "Skip Routine" and randomization functionality (added in v2.0)
+	bool bDebugLights = false;									// Adds debug statements to generated code to debug light functionality (added in v2.0)
 	bool bRandomizeRoutineOrder = false;						// Should the generated code randomize the routine that's played every loop?
 	bool bSwapOnOffValues = false;								// Should a "turn light on" command write LOW instead of HIGH?
 	bool bUploadToMp3 = false;									// Should upload mp3 songs to the MP3 player
@@ -114,6 +117,7 @@ public:
 	std::string trainPinRight = "";								// Pin used to reset the train; Generates the needed code if this is not empty
 	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
 	std::string randomSeedPin = "";								// The pin to use as the initializer for random seed
+	std::string motorVoltagePin = "";							// The pin used to read the voltage of a train motor (added in v2.0)
 
 	unsigned long allLightsOnBlock = 0;
 	unsigned long trainResetDuration = 0;						// The duration to run the train at the beginning of each power up
