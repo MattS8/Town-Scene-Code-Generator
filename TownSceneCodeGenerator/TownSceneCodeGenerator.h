@@ -97,7 +97,7 @@ public:
 class GenerationOptions
 {
 public:
-	bool bPrettyPrint = false;									// Should generated code be properly spaced and easier to read?
+	bool bPrettyPrint = true;									// Should generated code be properly spaced and easier to read (default set to TRUE in v2.1)?
 	bool bAddDebugStatements = false;							// #Defines DEBUG in generated code, causing Arduino to print out some helpful debug statements
 	bool bDebugTrain = false;									// Adds debug statements to generated code to debug train pin functionality (added in v2.0)
 	bool bDebugSkipRoutine = false;								// Adds debug statements to generated code to debug "Skip Routine" and randomization functionality (added in v2.0)
@@ -118,6 +118,8 @@ public:
 	std::string mp3DriveLetter = "";							// The drive letter where the plugged in MP3 player can be found
 	std::string randomSeedPin = "";								// The pin to use as the initializer for random seed
 	std::string motorVoltagePin = "";							// The pin used to read the voltage of a train motor (added in v2.0)
+	std::string wifiSSID = "";									// The SSID of the WiFi network to connect to (ESP32 only)
+	std::string wifiPassword = "";								// The password of the WiFi network to connect to (ESP32 only)
 
 	unsigned long allLightsOnBlock = 0;
 	unsigned long trainResetDuration = 0;						// The duration to run the train at the beginning of each power up

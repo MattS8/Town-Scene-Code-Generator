@@ -1,4 +1,4 @@
-// TownSceneCodeGenerator.cpp : Defines the entry point for the application.
+﻿// TownSceneCodeGenerator.cpp : Defines the entry point for the application.
 //
 
 #include "stdafx.h"
@@ -62,6 +62,8 @@ HWND gHWND;
 HWND hMP3DriveLetter;
 HWND hMP3Pin;
 HWND hMotionSensorPin;
+HWND hWifiSSID;
+HWND hWifiPass;
 HWND hPrettyPrintBox;
 HWND hDebugBox;
 HWND hRandomizeRoutineOrder;
@@ -680,6 +682,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				//Options.allLightsOnBlock = GetLongFromWindow(hAllLightsOnBlock);
 				Options.trainResetDuration = GetLongFromWindow(hTrainResetDuration);
 				Options.randomSeedPin = GetStringFromWindow(hRandomSeedPin);
+				Options.wifiSSID = GetStringFromWindow(hWifiSSID);
+				Options.wifiPassword = GetStringFromWindow(hWifiPass);
 				if (RequiredFieldsFilled())
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_VIEWCODE), hWnd, GenerateCodeCB);
 				else
@@ -1167,6 +1171,19 @@ void AddControls(HWND handler)
 	NextItemW += 145;
 	hRandomSeedPin = CreateWindowW(L"Edit", L"A7", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
 
+	// ESP32 Options
+	NextItemW = secondColumnStart;
+	NextItemH += 35 + 30;
+	hStatic = CreateWindowW(L"Static", L"ESP32 OPTIONS: (leave blank if not using ESP32 board)", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH - 20, 435, 20, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	CreateWindowW(L"Static", L"WiFi SSID: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 100, 20, handler, NULL, NULL, NULL);
+	NextItemW += 100;
+	hWifiSSID = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 200, InputHeight, handler, NULL, NULL, NULL);
+	NextItemW += 200 + ColumSpace;
+	CreateWindowW(L"Static", L"WiFi Pass: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 100, 20, handler, NULL, NULL, NULL);
+	NextItemW += 100;
+	hWifiPass = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 200, InputHeight, handler, NULL, NULL, NULL);
+
 	// Bottom Bar
 	int bottomStart = OptionsRowHeight[4] + (cbHeight * 8) + 25;
 	int bottomColumStart = secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2);
@@ -1586,21 +1603,280 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 
 //---------------------------------------------------------------------------
 
-// Genrates the Arduino code given the routines and options selected
-std::string GenerateCode()
+// Generates code for esp32 web server
+std::string GenerateESP32WebInterfaceModuleCode()
 {
-	// Format strings
-	std::string comma = Options.bPrettyPrint ? ", " : ",";
-	std::string endBrace = Options.bPrettyPrint ? "}, " : "},";
-	std::string extraLine = Options.bPrettyPrint ? "\r\n" : "";
-	
-	std::ostringstream outputString, osRoutineArray;
-	int i;
+	std::ostringstream outputString;
 
-	// Constants and #Defines 
-	outputString << "#define ulong unsigned long\r\n#define ON " << (Options.bSwapOnOffValues ? 0 : 1) << "\r\n#define OFF " << (Options.bSwapOnOffValues ? 1 : 0) <<"\r\n#define P_ALL_OFF -1\r\n#define P_ALL_ON -2\r\n";
+	if (Options.bPrettyPrint) {
+		outputString << "// =============================================================\r\n"
+			<< "//                   WEB INTERFACE MODULE\r\n"
+			<< "//           (Self-contained — safe for auto-generated code)\r\n"
+			<< "// =============================================================";
+	}
+
+	outputString << "#include <WiFi.h>\r\n"
+		<< "#include <WebServer.h>\r\n" << "\r\n"
+		<< "WebServer server(80);\r\n" << "\r\n"
+		<< "const char* WIFI_SSID = \"" << Options.wifiSSID << "\";\r\n"
+		<< "const char* WIFI_PASS = \"" << Options.wifiPassword << "\":\r\n";
+	if (Options.bPrettyPrint) {
+		outputString << "\r\n// -------------------------------------------------------------"
+			<< "//    Build Web Page (simple status + skip button)\r\n"
+			<< "// -------------------------------------------------------------\r\n";
+	}
+	outputString << "String buildPage() {\r\n"
+		<< "	String ip = WiFi.localIP().toString();\r\n"
+		<< "	String html = R\"(\r\n"
+		<< "<!DOCTYPE html>\r\n"
+		<< "<html>\r\n"
+		<< "<head>\r\n";
+	outputString
+		<< "<meta charset = 'utf-8'>\r\n"
+		<< "<meta name = 'viewport' content = 'width=device-width, initial-scale=1'>\r\n"
+		<< "<title>Christmas Scene Controller< / title>\r\n"
+		<< "\r\n"
+		<< "<style>\r\n"
+		<< ":root{\r\n"
+		<< "	--bg: #0d1117;\r\n"
+		<< "	--card: #161b22;\r\n"
+		<< "	--text: #e6edf3;\r\n"
+		<< "	--accent: #2ea043;\r\n"
+		<< "	--accent2: #238636;\r\n"
+		<< "	--btn - text: white;\r\n"
+		<< "	--font: 'Segoe UI', Roboto, Helvetica, Arial, sans - serif;\r\n"
+		<< "}\r\n";
+	outputString
+		<< "\r\n"
+		<< "body{\r\n"
+		<< "	margin : 0;\r\n"
+		<< "	padding : 0;\r\n"
+		<< "	background: var(--bg);\r\n"
+		<< "	color: var(--text);\r\n"
+		<< "	font - family: var(--font);\r\n"
+		<< "	text - align: center;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< ".container{\r\n"
+		<< "	padding: 20px;\r\n"
+		<< "	max - width: 480px;\r\n"
+		<< "	margin: auto;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "h1{\r\n"
+		<< "	font - size: 1.7rem;\r\n"
+		<< "	margin - bottom: 10px;\r\n"
+		<< "}\r\n"
+		<< "\r\n";
+	outputString
+		<< ".status - card{\r\n"
+		<< "	background: var(--card);\r\n"
+		<< "	border - radius: 14px;\r\n"
+		<< "	padding: 20px;\r\n"
+		<< "	box - shadow: 0 0 10px #000a;\r\n"
+		<< "	margin - bottom: 80px;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< ".routine - number{\r\n"
+		<< "	font - size: 3rem;\r\n"
+		<< "	font - weight: bold;\r\n"
+		<< "	margin: 10px 0;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< ".ip{\r\n"
+		<< "	font - size: 0.9rem;\r\n"
+		<< "	opacity: 0.7;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "/* Skip Button (fixed bottom) */\r\n"
+		<< ".skip - bar{\r\n"
+		<< "	position: fixed;\r\n"
+		<< "	bottom : 0;\r\n"
+		<< "	left : 0;\r\n"
+		<< "	right : 0;\r\n"
+		<< "	padding: 18px;\r\n"
+		<< "	background: var(--card);\r\n"
+		<< "	box - shadow: 0 - 2px 10px #000a;\r\n"
+		<< "}\r\n"
+		<< "\r\n";
+	outputString
+		<< "button{\r\n"
+		<< "	width: 90 %;\r\n"
+		<< "	max - width: 350px;\r\n"
+		<< "	font - size: 1.4rem;\r\n"
+		<< "	padding: 16px;\r\n"
+		<< "	border - radius: 12px;\r\n"
+		<< "	border: none;\r\n"
+		<< "	background: var(--accent);\r\n"
+		<< "	color: var(--btn - text);\r\n"
+		<< "	font - weight: bold;\r\n"
+		<< "	transition: 0.15s;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "button:active{\r\n"
+		<< "	background: var(--accent2);\r\n"
+		<< "	transform: scale(0.98);\r\n"
+		<< "}\r\n"
+		<< "</style>\r\n"
+		<< "\r\n"
+		<< "<script>\r\n"
+		<< "// Auto-refresh just the routine number every 2 seconds (no page reload)\r\n"
+		<< "setInterval(() = > {\r\n"
+		<< "fetch('/routine')\r\n"
+		<< "	.then(r = > r.text())\r\n"
+		<< "	.then(num = > {\r\n"
+		<< "	document.getElementById('routine').innerText = num;\r\n"
+		<< "});\r\n"
+		<< "}, 2000);\r\n"
+		<< "</script>\r\n"
+		<< "\r\n"
+		<< "</head>\r\n"
+		<< "<body>\r\n"
+		<< "\r\n";
+	outputString
+		<< "<div class = 'container'>\r\n"
+		<< "<h1>🎄 Christmas Scene Controller 🎶< / h1>\r\n"
+		<< "\r\n"
+		<< "<div class = 'status-card'>\r\n"
+		<< "<div>Current Routine : < / div>\r\n"
+		<< "<div id = 'routine' class = 'routine-number'>)\";\r\n"
+		<< "\r\n"
+		<< "	html += String(CurrentRoutine);\r\n"
+		<< "\r\n"
+		<< "	html += R\"(</div>\r\n"
+		<< "<div class='ip'>Device IP: )\";\r\n"
+		<< "\r\n"
+		<< "	html += ip;\r\n"
+		<< "\r\n"
+		<< "	html += R\"(</div>\r\n"
+		<< "</div>\r\n"
+		<< "</div>\r\n"
+		<< "\r\n"
+		<< "<div class='skip-bar'>\r\n"
+		<< "<form action='/skip' method='POST'>\r\n"
+		<< "<button type='submit'>Skip to Next Routine ➤</button>\r\n"
+		<< "</form>\r\n"
+		<< "</div>\r\n"
+		<< "\r\n"
+		<< "</body>\r\n"
+		<< "</html>\r\n"
+		<< ")\";" 
+		<< "\r\n" 
+		<< "	return html;\r\n" 
+		<< "}\r\n";
+
+	if (Options.bPrettyPrint) {
+		outputString 
+			<< "// -------------------------------------------------------------\r\n"
+			<< "//                Web Request Handlers\r\n"
+			<< "// -------------------------------------------------------------\r\n"
+			<< "// Simple endpoint returning only the current routine number\r\n";
+	}
+
+	outputString << "void handleRoutine() {\r\n"
+		<< "	server.send(200, \"text/plain\", String(CurrentRoutine));\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "void handleRoot() {\r\n"
+		<< "	server.send(200, \"text/html\", buildPage());\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "void handleSkip() {\r\n"
+		<< "	RequestWebSkip();   // set flag (non-blocking)\r\n"
+		<< "	server.sendHeader(\"Location\", \"/\");\r\n"
+		<< "	server.send(303);    // redirect back to main page\r\n"
+		<< "}\r\n";
+
+	if (Options.bPrettyPrint) {
+		outputString
+			<< "// -------------------------------------------------------------\r\n"
+			<< "//            Start Web Server (call from setup())\r\n"
+			<< "// -------------------------------------------------------------\r\n";
+	}
+	outputString
+		<< "void StartWebServer() {\r\n"
+		<< "	delay(500);\r\n"
+		<< "\r\n"
+		<< "	server.on(\"/routine\", handleRoutine);\r\n"
+		<< "\r\n"
+		<< "	Serial.println(\"Starting WiFi...\");\r\n"
+		<< "	WiFi.mode(WIFI_STA);\r\n"
+		<< "	WiFi.begin(WIFI_SSID, WIFI_PASS);\r\n"
+		<< "\r\n"
+		<< "	while (WiFi.status() != WL_CONNECTED) {\r\n"
+		<< "		delay(300);\r\n"
+		<< "		Serial.print(\".\");\r\n"
+		<< "	}\r\n"
+		<< "	Serial.println(\"WiFi Connected.\");\r\n"
+		<< "	Serial.print(\"IP Address: \");\r\n"
+		<< "	Serial.println(WiFi.localIP());\r\n"
+		<< "\r\n"
+		<< "	// Routes\r\n"
+		<< "	server.on(\"/\", handleRoot);\r\n"
+		<< "	server.on(\"/skip\", HTTP_POST, handleSkip);\r\n"
+		<< "\r\n"
+		<< "	server.begin();\r\n"
+		<< "	Serial.println(\"Web Server started.\");\r\n"
+		<< "}\r\n";
+
+	if (Options.bPrettyPrint) {
+		outputString
+			<< "// -------------------------------------------------------------\r\n"
+			<< "//      Call server.handleClient() inside loop()\r\n"
+			<< "// -------------------------------------------------------------\r\n";
+	}
+	outputString
+		<< "void HandleWebRequests() {\r\n"
+		<< "	server.handleClient();\r\n"
+		<< "}\r\n";
+
+	return outputString.str();
+}
+
+// Generates #defines and constants for the selected options
+std::string GenerateDefines(bool useESP32Board)
+{
+	std::ostringstream outputString;
+
+	outputString << "#define ulong unsigned long\r\n"
+		<< "#define ON " << (Options.bSwapOnOffValues ? 0 : 1) << "\r\n"
+		<< "#define OFF " << (Options.bSwapOnOffValues ? 1 : 0) << "\r\n"
+		<< "#define P_ALL_OFF -1\r\n"
+		<< "#define P_ALL_ON -2\r\n";
+	// Remap pins for esp32 boards
+	if (useESP32Board) {
+		if (Options.bPrettyPrint)
+			outputString << "// ----- Digital pins remapped to ESP32 GPIOs -----" << "\r\n";
+		outputString << "#define D2 23" << "\r\n"
+			<< "#define D3 32" << "\r\n"
+			<< "#define D4 33" << "\r\n"
+			<< "#define D5 25" << "\r\n"
+			<< "#define D6 26" << "\r\n"
+			<< "#define D7 27" << "\r\n"
+			<< "#define D8 14" << "\r\n"
+			<< "#define D9 12" << "\r\n"
+			<< "#define D10 13" << "\r\n"
+			<< "#define D11 22" << "\r\n"
+			<< "#define D12 15" << "\r\n"
+			<< "#define D13 16" << "\r\n";
+		if (Options.bPrettyPrint)
+			outputString << "\r\n// ----- Nano analog pin numbers remapped as general I/O -----" << "\r\n";
+		outputString << "#define A0 2" << "\r\n"
+			<< "#define A1 4" << "\r\n"
+			<< "#define A2 16" << "\r\n"
+			<< "#define A3 17" << "\r\n"
+			<< "#define A4 5" << "\r\n"
+			<< "#define A5 18" << "\r\n"
+			<< "#define A6 39" << (Options.bPrettyPrint ? "   // ADC1_CH0 (real analog)" : "") << "\r\n"
+			<< "#define A7 36" << (Options.bPrettyPrint ? "   // ADC1_CH3 (random seed floating input)" : "") << "\r\n";
+	}
+	else {
+		outputString << "#define D2 2\r\n" << "#define D3 3\r\n" << "#define D4 4\r\n" << "#define D5 5\r\n" << "#define D6 6\r\n" << "#define D7 7\r\n" << "#define D8 8\r\n";
+		outputString << "#define D9 9\r\n" << "#define D10 10\r\n" << "#define D11 11\r\n" << "#define D12 12\r\n" << "#define D13 13\r\n";
+	}
+
 	if (Options.bPrettyPrint)
-		outputString << "// PINS\r\n";
+		outputString << "\r\n";
 	if (!Options.motionSensorPin.empty())
 		outputString << "#define PMotionSense " << Options.motionSensorPin << "\r\n";
 	outputString << "#define MP3SkipPin " << Options.mp3SkipPin << "\r\n";
@@ -1614,10 +1890,24 @@ std::string GenerateCode()
 		outputString << "#define DEBUG_TRAIN\r\n";
 	if (Options.bDebugSkipRoutine)
 		outputString << "#define DEBUG_SKIP_ROUTINE\r\n";
-	outputString << "#define D2 2\r\n" << "#define D3 3\r\n" << "#define D4 4\r\n" << "#define D5 5\r\n" << "#define D6 6\r\n" << "#define D7 7\r\n" << "#define D8 8\r\n";
-	outputString << "#define D9 9\r\n" << "#define D10 10\r\n" << "#define D11 11\r\n" << "#define D12 12\r\n" << "#define D13 13\r\n";
-	if (Options.bPrettyPrint)
-		outputString << "\r\n";
+
+	return outputString.str();
+}
+
+// Genrates the Arduino code given the routines and options selected
+std::string GenerateCode()
+{
+	// Format strings
+	std::string comma = Options.bPrettyPrint ? ", " : ",";
+	std::string endBrace = Options.bPrettyPrint ? "}, " : "},";
+	std::string extraLine = Options.bPrettyPrint ? "\r\n" : "";
+	
+	std::ostringstream outputString, osRoutineArray;
+	int i;
+	bool useESP32Board = !Options.wifiSSID.empty();
+
+	// Constants and #Defines 
+	outputString << GenerateDefines(useESP32Board);
 
 	outputString <<	"bool bAllLightsOn = false;\r\n#define bRandomizeRoutineOrder " << (Options.bRandomizeRoutineOrder ? "true" : "false") << "\r\n";
 	int numLights = 0;
@@ -1700,6 +1990,8 @@ std::string GenerateCode()
 	else
 		outputString << "unsigned long Start;\r\n	unsigned long End;";
 	outputString << "\r\n} OnTime;\r\n\r\ntypedef struct Light\r\n{ \r\n	int Pin; \r\n	 OnTime* Times; \r\n	int NumberOfOnTimes; \r\n	int State; \r\n } Light; \r\n\r\ntypedef struct Routine\r\n{\r\n	Light** Lights;\r\n	int NumberOfLights;\r\n	" << (Options.bUseLowPrecisionTimes ? "unsigned int" : "unsigned long") << " RoutineTime;\r\n} Routine;\r\n";
+	if (useESP32Board)
+		outputString << "volatile bool WebSkipRequested = false;" << "\r\n";
 	outputString << extraLine;
 
 	// Routine Variables
@@ -2027,6 +2319,8 @@ std::string GenerateCode()
 		outputString << "	delay(7000);\r\n";
 	}
 	outputString << "	TurnAllLights(OFF);\r\n";
+	if (useESP32Board)
+		outputString << "	StartWebServer();";
 	outputString << "}\r\n";
 	outputString << extraLine;
 
@@ -2041,6 +2335,16 @@ std::string GenerateCode()
 	}
 	else {
 		outputString << "	CurrentRoutine = SkipToRoutine();\r\n";
+	}
+	if (useESP32Board) {
+		if (Options.bPrettyPrint)
+			outputString << "	// Web interface skip request\r\n";
+		outputString << "	if (WebSkipRequested) {" << "\r\n"
+			<< "		WebSkipRequested = false;" << "\r\n"
+			<< "		CurrentRoutine = SkipToRoutine();" << "\r\n"
+			<< "	}" << "\r\n"
+			<< (Options.bPrettyPrint ? "	// Handle new web requests\r\n" : "")
+			<< "	HandleWebRequests();" << "\r\n";
 	}
 
 	// Commented out debug code
@@ -2069,6 +2373,16 @@ std::string GenerateCode()
 
 	if (!Options.mp3VolumePin.empty())
 		outputString << "		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
+
+	if (useESP32Board) {
+		outputString << (Options.bPrettyPrint ? "		// This keeps web server responsive\r\n" : "")
+			<< "		HandleWebRequests();" << "\r\n"
+			<< "		if (WebSkipRequested) {" << "\r\n"
+			<< "			WebSkipRequested = false;\r\n"
+			<< "			CurrentRoutine = SkipToRoutine();\r\n"
+			<< "			break;" << (Options.bPrettyPrint ? "	// Break out of running routine immediately" : "") << "\r\n"
+			<< "		}\r\n";
+	}
 	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n\r\n";
 	
 	// Train train motor state
@@ -2118,6 +2432,11 @@ std::string GenerateCode()
 
 	outputString << "}\r\n";
 	outputString << extraLine;
+
+	// ESP32 Web Interface Module
+	if (useESP32Board) {
+		outputString << GenerateESP32WebInterfaceModuleCode();
+	}
 
 	return outputString.str();
 }
