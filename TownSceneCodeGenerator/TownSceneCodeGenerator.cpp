@@ -82,6 +82,47 @@ HWND hRandomSeedPin;
 HWND hRoutineScrollContainer; // Handle to scrollable container window
 int totalRoutineHeight = 0; // Track total height of all routines
 
+// UI Constants - Spacing, Sizes, Colors, Fonts
+namespace UIConstants {
+	// Spacing
+	const int MARGIN_SMALL = 5;
+	const int MARGIN_MEDIUM = 10;
+	const int MARGIN_LARGE = 15;
+	const int MARGIN_XLARGE = 20;
+	const int SECTION_SPACING = 30;
+	const int CONTROL_SPACING = 8;
+	const int LABEL_INPUT_GAP = 5;
+	const int COLUMN_SPACING = 10;
+	
+	// Sizes
+	const int BUTTON_HEIGHT_STANDARD = 30;
+	const int BUTTON_HEIGHT_LARGE = 35;
+	const int BUTTON_WIDTH_SMALL = 100;
+	const int BUTTON_WIDTH_MEDIUM = 120;
+	const int BUTTON_WIDTH_LARGE = 140;
+	const int BUTTON_WIDTH_XLARGE = 200;
+	const int INPUT_HEIGHT = 22;
+	const int INPUT_WIDTH_PIN = 40;
+	const int INPUT_WIDTH_STANDARD = 200;
+	const int LABEL_HEIGHT = 20;
+	const int HEADER_HEIGHT = 16;
+	const int GROUP_BOX_PADDING = 20;
+	
+	// Fonts
+	const int FONT_SIZE_HEADER = 18;
+	const int FONT_SIZE_SUBHEADER = 16;
+	const int FONT_SIZE_BUTTON = 16;
+	const int FONT_SIZE_LABEL = 14;
+	const int FONT_SIZE_INPUT = 14;
+	const wchar_t* FONT_FAMILY = L"Segoe UI";
+	
+	// Colors (RGB values)
+	const COLORREF COLOR_MY_BACKGROUND = RGB(240, 240, 240);
+	const COLORREF COLOR_SECTION_BG = RGB(255, 255, 255);
+	const COLORREF COLOR_BORDER = RGB(200, 200, 200);
+	const COLORREF COLOR_TEXT = RGB(0, 0, 0);
+	const COLORREF COLOR_TEXT_SECONDARY = RGB(64, 64, 64);
+}
 
 #define NUM_A_PINS 8
 #define NUM_D_PINS 12
@@ -783,10 +824,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_ERASEBKGND:
 	{
+		using namespace UIConstants;
 		HDC hdc = (HDC)wParam;
 		RECT rect;
 		GetClientRect(hWnd, &rect);
-		FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW+1));
+		HBRUSH hBrush = CreateSolidBrush(COLOR_MY_BACKGROUND);
+		FillRect(hdc, &rect, hBrush);
+		DeleteObject(hBrush);
 		return 1;
 	}
 	// case WM_VSCROLL:
@@ -1013,22 +1057,34 @@ bool RequiredFieldsFilled()
 HFONT g_HeaderFont = NULL;
 HFONT g_ButtonFont = NULL;
 HFONT g_OptionsHeaderFont = NULL;
+HFONT g_LabelFont = NULL;
+HFONT g_InputFont = NULL;
 
 // Sets up the GUI for all the options and controls of this application
 void AddControls(HWND handler)
 {
+	using namespace UIConstants;
+	
 	if (g_HeaderFont == NULL)
 	{
-		g_HeaderFont = CreateFont(20, 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+		g_HeaderFont = CreateFont(FONT_SIZE_HEADER, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
 	}
 
 	if (g_ButtonFont == NULL)
 	{
-		g_ButtonFont = CreateFont(16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+		g_ButtonFont = CreateFont(FONT_SIZE_BUTTON, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
 	}
 	if (g_OptionsHeaderFont == NULL)
 	{
-		g_OptionsHeaderFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Arial");
+		g_OptionsHeaderFont = CreateFont(FONT_SIZE_SUBHEADER, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
+	}
+	if (g_LabelFont == NULL)
+	{
+		g_LabelFont = CreateFont(FONT_SIZE_LABEL, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
+	}
+	if (g_InputFont == NULL)
+	{
+		g_InputFont = CreateFont(FONT_SIZE_INPUT, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
 	}
 
 	RECT rect;
@@ -1037,7 +1093,7 @@ void AddControls(HWND handler)
 	{
 		width = rect.right - rect.left;
 		height = rect.bottom - rect.top;
-		RoutineWidth = width / 2 - (RoutineBtnWidth * 3) - 50;
+		RoutineWidth = width / 2 - (RoutineBtnWidth * 3) - (MARGIN_XLARGE * 2);
 	}
 
 	hwdHandler = handler;
@@ -1045,34 +1101,34 @@ void AddControls(HWND handler)
 	int HeaderRowHeights[4];
 	int OptionsRowHeight[7];
 
-	HeaderRowHeights[0] = 7;
-	OptionsRowHeight[0] = HeaderRowHeights[0] + 20;
+	HeaderRowHeights[0] = MARGIN_MEDIUM;
+	OptionsRowHeight[0] = HeaderRowHeights[0] + MARGIN_XLARGE;
 	OptionsRowHeight[1] = OptionsRowHeight[0];
 	OptionsRowHeight[2] = OptionsRowHeight[1];
-	HeaderRowHeights[1] = OptionsRowHeight[2] + 40;
-	OptionsRowHeight[3] = HeaderRowHeights[1] + 25;
-	HeaderRowHeights[2] = OptionsRowHeight[3] + 40;
-	OptionsRowHeight[4] = HeaderRowHeights[2] + 25;
-	OptionsRowHeight[5] = OptionsRowHeight[4] + 25;
-	HeaderRowHeights[3] = OptionsRowHeight[5] + 55;
-	OptionsRowHeight[6] = HeaderRowHeights[3] + 25;
+	HeaderRowHeights[1] = OptionsRowHeight[2] + (SECTION_SPACING + MARGIN_MEDIUM);
+	OptionsRowHeight[3] = HeaderRowHeights[1] + (MARGIN_MEDIUM + MARGIN_SMALL);
+	HeaderRowHeights[2] = OptionsRowHeight[3] + (SECTION_SPACING + MARGIN_MEDIUM);
+	OptionsRowHeight[4] = HeaderRowHeights[2] + (MARGIN_MEDIUM + MARGIN_SMALL);
+	OptionsRowHeight[5] = OptionsRowHeight[4] + (MARGIN_MEDIUM + MARGIN_SMALL);
+	HeaderRowHeights[3] = OptionsRowHeight[5] + (SECTION_SPACING + MARGIN_MEDIUM);
+	OptionsRowHeight[6] = HeaderRowHeights[3] + (MARGIN_MEDIUM + MARGIN_SMALL);
 
 
-	int ColumSpace = 10;
-	int ItemHeight = 25;
-	int HeaderHeight = 20;
-	int LabelHeight = 20;
-	int InputHeight = 20;
+	int ColumSpace = COLUMN_SPACING;
+	int ItemHeight = BUTTON_HEIGHT_STANDARD;
+	int HeaderHeight = HEADER_HEIGHT;
+	int LabelHeight = LABEL_HEIGHT;
+	int InputHeight = INPUT_HEIGHT;
 
 	int NextItemW = 0;
 	int NextItemH = 0;
 
 
-	int cbHeight = 20;
-	int secondColumnStart = RoutineWidth + (RoutineBtnWidth*3) + 75;
+	int cbHeight = LABEL_HEIGHT;
+	int secondColumnStart = RoutineWidth + (RoutineBtnWidth*3) + (MARGIN_XLARGE * 3);
 	int reqFielsLen = 105;
-	int pinEditWidth = 35;
-	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + 60;
+	int pinEditWidth = INPUT_WIDTH_PIN;
+	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + (MARGIN_MEDIUM * 3);
 	int directUploadOptionsYPos = 150 + 55 + 70;
 
     // Register scroll container window class
@@ -1089,9 +1145,9 @@ void AddControls(HWND handler)
 		L"SCROLLWIN",  // Use the same class name as registered
 		L"",
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN,
-		5,
-		HeaderRowHeights[0] + 15 + 60,
-		RoutineWidth + (RoutineBtnWidth * 3) + 30,
+		MARGIN_SMALL,
+		HeaderRowHeights[0] + HEADER_HEIGHT + BUTTON_HEIGHT_STANDARD + (MARGIN_MEDIUM * 2),
+		RoutineWidth + (RoutineBtnWidth * 3) + (MARGIN_MEDIUM * 3),
 		height - 175,
 		handler,
 		NULL,
@@ -1101,140 +1157,189 @@ void AddControls(HWND handler)
 
 	// Routines
 	NextItemH = HeaderRowHeights[0];
-	HWND hStatic = CreateWindowW(L"Static", L"ROUTINES", WS_VISIBLE | WS_CHILD, 5, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
+	HWND hStatic = CreateWindowW(L"Static", L"ROUTINES", WS_VISIBLE | WS_CHILD, MARGIN_SMALL, HeaderRowHeights[0], secondColumnStart - (MARGIN_MEDIUM * 3), HEADER_HEIGHT + MARGIN_MEDIUM, handler, NULL, NULL, NULL);
 	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_HeaderFont, TRUE);
-	hStatic = CreateWindowW(L"Button", L"Add", WS_VISIBLE | WS_CHILD, 5, 35, 120, 30, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
+	hStatic = CreateWindowW(L"Button", L"Add", WS_VISIBLE | WS_CHILD, MARGIN_SMALL, HeaderRowHeights[0] + HEADER_HEIGHT + MARGIN_SMALL, BUTTON_WIDTH_MEDIUM, BUTTON_HEIGHT_STANDARD, handler, (HMENU)CREATE_ROUTINE, NULL, NULL);
 	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
-	hStatic = CreateWindowW(L"Button", L"Clear All", WS_VISIBLE | WS_CHILD, 5 + 130, 35, 140, 30, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
+	hStatic = CreateWindowW(L"Button", L"Clear All", WS_VISIBLE | WS_CHILD, MARGIN_SMALL + BUTTON_WIDTH_MEDIUM + MARGIN_SMALL, HeaderRowHeights[0] + HEADER_HEIGHT + MARGIN_SMALL, BUTTON_WIDTH_LARGE, BUTTON_HEIGHT_STANDARD, handler, (HMENU)CLEAR_ROUTINES, NULL, NULL);
 	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 
-	// Train Options
+	// Options Header
 	NextItemW = secondColumnStart;
-	hStatic = CreateWindowW(L"Static", L"OPTIONS", WS_VISIBLE | WS_CHILD, NextItemW, HeaderRowHeights[0], secondColumnStart - 30, 45 + 20, handler, NULL, NULL, NULL);
+	hStatic = CreateWindowW(L"Static", L"OPTIONS", WS_VISIBLE | WS_CHILD, NextItemW, HeaderRowHeights[0], secondColumnStart - (MARGIN_MEDIUM * 3), HEADER_HEIGHT + MARGIN_MEDIUM, handler, NULL, NULL, NULL);
 	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_HeaderFont, TRUE);
-	NextItemH += 60;
-	//CreateWindowW(L"Static", L"TRAIN OPTIONS", WS_VISIBLE | WS_CHILD, secondColumnStart, HeaderRowHeights[0], 120, 20, handler, NULL, NULL, NULL);
-	CreateWindowW(L"Static", L"Train Init Duration: ", WS_VISIBLE | WS_CHILD | SS_TRANSPARENT, NextItemW, NextItemH, 125, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 125;
-	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 55, InputHeight, handler, NULL, NULL, NULL);
-	NextItemW += 55 + ColumSpace;
-	CreateWindowW(L"Static", L"Train Pin (Left to Right): ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 175, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 155;
-	hTrainLeftPin = CreateWindowW(L"Edit", L"A5", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Train Pin (Right to Left): ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 175, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 155;
-	hTrainRightPin = CreateWindowW(L"Edit", L"A4", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += pinEditWidth;
-	int HeaderCenter = secondColumnStart;/*secondColumnStart + (NextItemW - secondColumnStart - 160) / 2;*/
-	hStatic = CreateWindowW(L"Static", L"TRAIN OPTIONS:", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH-25, 160, 20, handler, NULL, NULL, NULL);
-	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
-
-	NextItemW = secondColumnStart;
-	NextItemH += 25;
-	CreateWindowW(L"Static", L"Motor Voltage Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 125, LabelHeight, handler, NULL, NULL, NULL);
-	NextItemW += 125;
-	hTrainMotorPin = CreateWindowW(L"Edit", L"A6", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, LabelHeight, handler, NULL, NULL, NULL);
 	
-	// MP3 Options
+	// Train Options Group
+	NextItemH = HeaderRowHeights[0] + HEADER_HEIGHT + (MARGIN_MEDIUM * 2);
+	int trainGroupY = NextItemH;
+	int trainGroupHeight = 80;
+	HWND hTrainGroup = CreateWindowW(L"Button", L"", WS_VISIBLE | WS_CHILD | BS_GROUPBOX, secondColumnStart - MARGIN_SMALL, trainGroupY, width - secondColumnStart - MARGIN_MEDIUM, trainGroupHeight, handler, NULL, NULL, NULL);
+	
+	int HeaderCenter = secondColumnStart;
+	hStatic = CreateWindowW(L"Static", L"TRAIN OPTIONS", WS_VISIBLE | WS_CHILD, HeaderCenter + MARGIN_SMALL, trainGroupY - (HEADER_HEIGHT / 2), 160, HEADER_HEIGHT, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	
+	NextItemW = secondColumnStart + GROUP_BOX_PADDING;
+	NextItemH = trainGroupY + GROUP_BOX_PADDING;
+	hStatic = CreateWindowW(L"Static", L"Train Init Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 125, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 125 + LABEL_INPUT_GAP;
+	hTrainResetDuration = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 55, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hTrainResetDuration, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
+	NextItemW += 55 + ColumSpace;
+	hStatic = CreateWindowW(L"Static", L"Train Pin (Left to Right): ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 175, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 175 + LABEL_INPUT_GAP;
+	hTrainLeftPin = CreateWindowW(L"Edit", L"A5", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hTrainLeftPin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
+	NextItemW += pinEditWidth + ColumSpace;
+	hStatic = CreateWindowW(L"Static", L"Train Pin (Right to Left): ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 175, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 175 + LABEL_INPUT_GAP;
+	hTrainRightPin = CreateWindowW(L"Edit", L"A4", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hTrainRightPin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
+
+	NextItemW = secondColumnStart + GROUP_BOX_PADDING;
+	NextItemH += InputHeight + CONTROL_SPACING;
+	hStatic = CreateWindowW(L"Static", L"Motor Voltage Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 125, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 125 + LABEL_INPUT_GAP;
+	hTrainMotorPin = CreateWindowW(L"Edit", L"A6", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hTrainMotorPin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
+	
+	// MP3 Options Group
 	NextItemW = secondColumnStart;
-	NextItemH += 35+30;
-	CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 105, 20, handler, NULL, NULL, NULL);
-	NextItemW += 105;
+	NextItemH = trainGroupY + trainGroupHeight + SECTION_SPACING;
+	int mp3GroupY = NextItemH;
+	int mp3GroupHeight = 60;
+	HWND hMP3Group = CreateWindowW(L"Button", L"", WS_VISIBLE | WS_CHILD | BS_GROUPBOX, secondColumnStart - MARGIN_SMALL, mp3GroupY, width - secondColumnStart - MARGIN_MEDIUM, mp3GroupHeight, handler, NULL, NULL, NULL);
+	
+	hStatic = CreateWindowW(L"Static", L"MP3 OPTIONS", WS_VISIBLE | WS_CHILD, HeaderCenter + MARGIN_SMALL, mp3GroupY - (HEADER_HEIGHT / 2), 155, HEADER_HEIGHT, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	
+	NextItemW = secondColumnStart + GROUP_BOX_PADDING;
+	NextItemH = mp3GroupY + GROUP_BOX_PADDING;
+	hStatic = CreateWindowW(L"Static", L"Power/Skip Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 105, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 105 + LABEL_INPUT_GAP;
 	hMP3Pin = CreateWindowW(L"Edit", L"A3", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hMP3Pin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 83, 20, handler, NULL, NULL, NULL);
-	NextItemW += 83;
+	hStatic = CreateWindowW(L"Static", L"Volume Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 83, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 83 + LABEL_INPUT_GAP;
 	hMP3VolPin = CreateWindowW(L"Edit", L"A2", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hMP3VolPin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Windows Drive Letter: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 150, 20, handler, NULL, NULL, NULL);
-	NextItemW += 150;
+	hStatic = CreateWindowW(L"Static", L"Windows Drive Letter: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 150, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 150 + LABEL_INPUT_GAP;
 	hMP3DriveLetter = CreateWindowW(L"Edit", L"D", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
-	NextItemW += pinEditWidth;
-	hStatic = CreateWindowW(L"Static", L"MP3 OPTIONS:", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH-20, 155, 20, handler, NULL, NULL, NULL);
-	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	SendMessage(hMP3DriveLetter, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 
-	// Misc Options
+	// Misc Options Group
 	NextItemW = secondColumnStart;
-	NextItemH += 35 + 30;
-	hStatic = CreateWindowW(L"Static", L"MISC OPTIONS:", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH - 20, 155, 20, handler, NULL, NULL, NULL);
+	NextItemH = mp3GroupY + mp3GroupHeight + SECTION_SPACING;
+	int miscGroupY = NextItemH;
+	int miscGroupHeight = 50;
+	HWND hMiscGroup = CreateWindowW(L"Button", L"", WS_VISIBLE | WS_CHILD | BS_GROUPBOX, secondColumnStart - MARGIN_SMALL, miscGroupY, width - secondColumnStart - MARGIN_MEDIUM, miscGroupHeight, handler, NULL, NULL, NULL);
+	
+	hStatic = CreateWindowW(L"Static", L"MISC OPTIONS", WS_VISIBLE | WS_CHILD, HeaderCenter + MARGIN_SMALL, miscGroupY - (HEADER_HEIGHT / 2), 155, HEADER_HEIGHT, handler, NULL, NULL, NULL);
 	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
-	//CreateWindowW(L"Static", L"\"All Lights On\" Init Duration: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 185, 20, handler, NULL, NULL, NULL);
-	//NextItemW += 185;
-	//hAllLightsOnBlock = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 55, InputHeight, handler, NULL, NULL, NULL);
-	//NextItemW += 55 + ColumSpace;
-	CreateWindowW(L"Static", L"Motion Sense Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 122, 20, handler, NULL, NULL, NULL);
-	NextItemW += 122;
+	
+	NextItemW = secondColumnStart + GROUP_BOX_PADDING;
+	NextItemH = miscGroupY + GROUP_BOX_PADDING;
+	hStatic = CreateWindowW(L"Static", L"Motion Sense Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 122, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 122 + LABEL_INPUT_GAP;
 	hMotionSensorPin = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hMotionSensorPin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 	NextItemW += pinEditWidth + ColumSpace;
-	CreateWindowW(L"Static", L"Randomize Seed Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 145, 20, handler, NULL, NULL, NULL);
-	NextItemW += 145;
+	hStatic = CreateWindowW(L"Static", L"Randomize Seed Pin: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 145, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 145 + LABEL_INPUT_GAP;
 	hRandomSeedPin = CreateWindowW(L"Edit", L"A7", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, pinEditWidth, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hRandomSeedPin, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 
-	// ESP32 Options
+	// ESP32 Options Group
 	NextItemW = secondColumnStart;
-	NextItemH += 35 + 30;
-	hStatic = CreateWindowW(L"Static", L"ESP32 OPTIONS: (leave blank if not using ESP32 board)", WS_VISIBLE | WS_CHILD, HeaderCenter, NextItemH - 20, 435, 20, handler, NULL, NULL, NULL);
+	NextItemH = miscGroupY + miscGroupHeight + SECTION_SPACING;
+	int esp32GroupY = NextItemH;
+	int esp32GroupHeight = 50;
+	HWND hESP32Group = CreateWindowW(L"Button", L"", WS_VISIBLE | WS_CHILD | BS_GROUPBOX, secondColumnStart - MARGIN_SMALL, esp32GroupY, width - secondColumnStart - MARGIN_MEDIUM, esp32GroupHeight, handler, NULL, NULL, NULL);
+	
+	hStatic = CreateWindowW(L"Static", L"ESP32 OPTIONS (leave blank if not using ESP32 board)", WS_VISIBLE | WS_CHILD, HeaderCenter + MARGIN_SMALL, esp32GroupY - (HEADER_HEIGHT / 2), 435, HEADER_HEIGHT, handler, NULL, NULL, NULL);
 	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
-	CreateWindowW(L"Static", L"WiFi SSID: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 100, 20, handler, NULL, NULL, NULL);
-	NextItemW += 100;
-	hWifiSSID = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 200, InputHeight, handler, NULL, NULL, NULL);
-	NextItemW += 200 + ColumSpace;
-	CreateWindowW(L"Static", L"WiFi Pass: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 100, 20, handler, NULL, NULL, NULL);
-	NextItemW += 100;
-	hWifiPass = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, 200, InputHeight, handler, NULL, NULL, NULL);
+	
+	NextItemW = secondColumnStart + GROUP_BOX_PADDING;
+	NextItemH = esp32GroupY + GROUP_BOX_PADDING;
+	hStatic = CreateWindowW(L"Static", L"WiFi SSID: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 100, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 100 + LABEL_INPUT_GAP;
+	hWifiSSID = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, INPUT_WIDTH_STANDARD, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hWifiSSID, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
+	NextItemW += INPUT_WIDTH_STANDARD + ColumSpace;
+	hStatic = CreateWindowW(L"Static", L"WiFi Pass: ", WS_VISIBLE | WS_CHILD, NextItemW, NextItemH, 100, LabelHeight, handler, NULL, NULL, NULL);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+	NextItemW += 100 + LABEL_INPUT_GAP;
+	hWifiPass = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, INPUT_WIDTH_STANDARD, InputHeight, handler, NULL, NULL, NULL);
+	SendMessage(hWifiPass, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 
 	// Bottom Bar
-	int bottomStart = OptionsRowHeight[4] + (cbHeight * 8) + 25;
-	int bottomColumStart = secondColumnStart + ((thirdColumnStart - 200 - secondColumnStart) / 2);
-	int outputLength = 0;
+	int bottomStart = esp32GroupY + esp32GroupHeight + (SECTION_SPACING * 2);
+	int bottomColumStart = secondColumnStart;
+	int outputLength = width - secondColumnStart - MARGIN_MEDIUM;
+	
 	hStatic = CreateWindowW(L"Button", L"View Generated Code", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart,
 		bottomStart, 
-		200, 
-		35, 
+		BUTTON_WIDTH_XLARGE, 
+		BUTTON_HEIGHT_LARGE, 
 		handler, (HMENU)GENERATE_CODE, NULL, NULL);
-		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
-	outputLength += 200;
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	
 	hStatic = CreateWindowW(L"Button", L"Create .ino File", WS_VISIBLE | WS_CHILD, 
-		bottomColumStart + 210,
+		bottomColumStart + BUTTON_WIDTH_XLARGE + MARGIN_SMALL,
 		bottomStart, 
-		200, 
-		35, 
+		BUTTON_WIDTH_XLARGE, 
+		BUTTON_HEIGHT_LARGE, 
 		handler, (HMENU)WRITE_TO_ARDUINO, NULL, NULL);
-		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
-	outputLength += 210;
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	
 	hStatic = CreateWindowW(L"Button", L"Upload to Device(s)", WS_VISIBLE | WS_CHILD, 
-		bottomColumStart + 210 + 210,
+		bottomColumStart + (BUTTON_WIDTH_XLARGE * 2) + (MARGIN_SMALL * 2),
 		bottomStart, 
-		150, 35, 
+		BUTTON_WIDTH_XLARGE, 
+		BUTTON_HEIGHT_LARGE, 
 		handler, (HMENU)UPLOAD_CODE, NULL, NULL);
-		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 		
-	outputLength += 185;
 	hStatic = CreateWindowW(L"Static", L"Output Log: ", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart,
-		bottomStart + 45, 
-		950,
-		20, 
+		bottomStart + BUTTON_HEIGHT_LARGE + MARGIN_SMALL, 
+		outputLength,
+		HEADER_HEIGHT, 
 		handler, NULL, NULL, NULL);
-		SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	SendMessage(hStatic, WM_SETFONT, (WPARAM)g_OptionsHeaderFont, TRUE);
+	
 	hClearLog = CreateWindowW(L"Button", L"Clear  (X)", WS_VISIBLE | WS_CHILD, 
 		bottomColumStart + 100,
-		bottomStart + 45,
-		99,
-		20,
+		bottomStart + BUTTON_HEIGHT_LARGE + MARGIN_SMALL,
+		BUTTON_WIDTH_SMALL,
+		LABEL_HEIGHT,
 		handler, (HMENU)CLEAR_LOG, NULL, NULL);
-		SendMessage(hClearLog, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	SendMessage(hClearLog, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
+	
 	hOutputLog = CreateWindowW(L"Edit", L"", 
 		WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL | 
 		ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL |
-		WS_CLIPSIBLINGS | WS_CLIPCHILDREN,  // Keep these flags
+		WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
 		bottomColumStart,
-		bottomStart + 65, 
+		bottomStart + BUTTON_HEIGHT_LARGE + HEADER_HEIGHT + (MARGIN_SMALL * 2), 
 		outputLength, 
-		height - (bottomStart + 150),
+		height - (bottomStart + BUTTON_HEIGHT_LARGE + HEADER_HEIGHT + (MARGIN_MEDIUM * 3)),
 		handler, NULL, NULL, NULL);
+	SendMessage(hOutputLog, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
 	
 }
 
@@ -1288,29 +1393,33 @@ void DrawRoutineList()
 		int rowHeight = (wStr.length() > 50 ? RoutineHeight * 2 : RoutineHeight);
 		int buttonYPos = (wStr.length() > 50 ? currentYPos-(RoutineHeight) : currentYPos);
 		routineGUI->title = CreateWindowW(L"Static", wStr.c_str(), WS_VISIBLE | WS_CHILD, 
-			5, 
+			UIConstants::MARGIN_SMALL, 
 			currentYPos, 
 			RoutineWidth, 
 			rowHeight,
 			hRoutineScrollContainer, NULL, NULL, NULL);
+		SendMessage(routineGUI->title, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
 		routineGUI->upButton = CreateWindowW(L"Button", L"Move Up", WS_VISIBLE | WS_CHILD, 
-			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
+			RoutineWidth + UIConstants::MARGIN_MEDIUM + (RoutineBtnWidth * buttonPos++), 
 			buttonYPos,
 			RoutineBtnWidth, 
 			RoutineBtnHeight, 
 			hRoutineScrollContainer, (HMENU)(MOVE_ROUTINE_UP + i - 1), NULL, NULL);
+		SendMessage(routineGUI->upButton, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 		routineGUI->downButton = CreateWindowW(L"Button", L"Move Down", WS_VISIBLE | WS_CHILD, 
-			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
+			RoutineWidth + UIConstants::MARGIN_MEDIUM + (RoutineBtnWidth * buttonPos++), 
 			buttonYPos,
 			RoutineBtnWidth, RoutineBtnHeight, 
 			hRoutineScrollContainer, (HMENU)(MOVE_ROUTINE_DOWN + i - 1), NULL, NULL);
+		SendMessage(routineGUI->downButton, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 		//routineGUI->editButton = CreateWindowW(L"Button", L"e", WS_VISIBLE | WS_CHILD, RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 45 + (RoutineHeight * i) + (i * 5), RoutineBtnWidth, RoutineBtnHeight, hwdHandler, (HMENU)(EDIT_ROUTINE + i - 1), NULL, NULL);
 		routineGUI->deleteButton = CreateWindowW(L"Button", L"X", WS_VISIBLE | WS_CHILD, 
-			RoutineWidth + 10 + (RoutineBtnWidth * buttonPos++), 
+			RoutineWidth + UIConstants::MARGIN_MEDIUM + (RoutineBtnWidth * buttonPos++), 
 			buttonYPos,
 			RoutineBtnWidth/2, 
 			RoutineBtnHeight,
 			hRoutineScrollContainer, (HMENU)(DELETE_ROUTINE + i - 1), NULL, NULL);
+		SendMessage(routineGUI->deleteButton, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 
 		totalRoutineHeight += 5 + rowHeight;
 		currentYPos += 5 + rowHeight;
