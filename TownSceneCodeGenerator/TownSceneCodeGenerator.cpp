@@ -631,6 +631,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             int wmId = LOWORD(wParam);
             switch (wmId)
             {
+			case ID_GENERATEDCODE_USECHRISTMASTRAINSETUP:
+				Options.bUseChristmasTrainSetup = !Options.bUseChristmasTrainSetup;
+				CheckMenuItem(GetMenu(hWnd), ID_GENERATEDCODE_USECHRISTMASTRAINSETUP, Options.bUseChristmasTrainSetup ? MF_CHECKED : MF_UNCHECKED);
+				break;
 			case IDM_GENERATEDCODEOPTIONS_PRETTYPRINT:
 				Options.bPrettyPrint = !Options.bPrettyPrint;
 				CheckMenuItem(GetMenu(hWnd), IDM_GENERATEDCODEOPTIONS_PRETTYPRINT, Options.bPrettyPrint ? MF_CHECKED : MF_UNCHECKED);
@@ -908,9 +912,26 @@ INT_PTR CALLBACK GenerateCodeCB(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 	switch (message)
 	{
 	case WM_INITDIALOG:
-		code = GenerateCode();
-		SetWindowTextW(GetDlgItem(hDlg, IDC_EDIT1), std::wstring(code.begin(), code.end()).c_str());
-		return (INT_PTR)TRUE;
+		{
+			// Set a font that supports emojis for the edit control
+			HWND hEdit = GetDlgItem(hDlg, IDC_EDIT1);
+			HFONT hFont = CreateFontW(
+				0, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+				CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+				L"Segoe UI"
+			);
+			if (hFont != NULL)
+			{
+				SendMessageW(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+			}
+			
+			code = GenerateCode();
+			// Properly convert UTF-8 to UTF-16 for display
+			std::wstring codeWide = UTF8ToUTF16(code);
+			SetWindowTextW(hEdit, codeWide.c_str());
+			return (INT_PTR)TRUE;
+		}
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 		{
@@ -1720,160 +1741,153 @@ std::string GenerateESP32WebInterfaceModuleCode()
 	if (Options.bPrettyPrint) {
 		outputString << "// =============================================================\r\n"
 			<< "//                   WEB INTERFACE MODULE\r\n"
-			<< "//           (Self-contained — safe for auto-generated code)\r\n"
-			<< "// =============================================================";
+			<< "//           (Self-contained & safe for auto-generated code)\r\n"
+			<< "// =============================================================\r\n";
 	}
 
 	outputString << "#include <WiFi.h>\r\n"
 		<< "#include <WebServer.h>\r\n" << "\r\n"
 		<< "WebServer server(80);\r\n" << "\r\n"
 		<< "const char* WIFI_SSID = \"" << Options.wifiSSID << "\";\r\n"
-		<< "const char* WIFI_PASS = \"" << Options.wifiPassword << "\":\r\n";
+		<< "const char* WIFI_PASS = \"" << Options.wifiPassword << "\";\r\n";
 	if (Options.bPrettyPrint) {
-		outputString << "\r\n// -------------------------------------------------------------"
+		outputString << "\r\n// -------------------------------------------------------------\r\n"
 			<< "//    Build Web Page (simple status + skip button)\r\n"
 			<< "// -------------------------------------------------------------\r\n";
 	}
 	outputString << "String buildPage() {\r\n"
 		<< "	String ip = WiFi.localIP().toString();\r\n"
-		<< "	String html = R\"(\r\n"
+		<< "	String html = R\"(\r\n";
+	// Start html content
+	outputString
 		<< "<!DOCTYPE html>\r\n"
 		<< "<html>\r\n"
-		<< "<head>\r\n";
-	outputString
-		<< "<meta charset = 'utf-8'>\r\n"
-		<< "<meta name = 'viewport' content = 'width=device-width, initial-scale=1'>\r\n"
-		<< "<title>Christmas Scene Controller< / title>\r\n"
+		<< "<head>\r\n"
+		<< "<meta charset='utf-8'>\r\n"
+		<< "<meta name='viewport' content='width=device-width, initial-scale=1'>\r\n"
+		<< "<title>Christmas Scene Controller</title>\r\n"
 		<< "\r\n"
 		<< "<style>\r\n"
-		<< ":root{\r\n"
-		<< "	--bg: #0d1117;\r\n"
-		<< "	--card: #161b22;\r\n"
-		<< "	--text: #e6edf3;\r\n"
-		<< "	--accent: #2ea043;\r\n"
-		<< "	--accent2: #238636;\r\n"
-		<< "	--btn - text: white;\r\n"
-		<< "	--font: 'Segoe UI', Roboto, Helvetica, Arial, sans - serif;\r\n"
-		<< "}\r\n";
-	outputString
+		<< "    :root {\r\n"
+		<< "        --bg: #0d1117;\r\n"
+		<< "        --card: #161b22;\r\n"
+		<< "        --text: #e6edf3;\r\n"
+		<< "        --accent: #2ea043;\r\n"
+		<< "        --accent2: #238636;\r\n"
+		<< "        --btn-text: white;\r\n"
+		<< "        --font: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< "body{\r\n"
-		<< "	margin : 0;\r\n"
-		<< "	padding : 0;\r\n"
-		<< "	background: var(--bg);\r\n"
-		<< "	color: var(--text);\r\n"
-		<< "	font - family: var(--font);\r\n"
-		<< "	text - align: center;\r\n"
-		<< "}\r\n"
+		<< "    body {\r\n"
+		<< "        margin: 0;\r\n"
+		<< "        padding: 0;\r\n"
+		<< "        background: var(--bg);\r\n"
+		<< "        color: var(--text);\r\n"
+		<< "        font-family: var(--font);\r\n"
+		<< "        text-align: center;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< ".container{\r\n"
-		<< "	padding: 20px;\r\n"
-		<< "	max - width: 480px;\r\n"
-		<< "	margin: auto;\r\n"
-		<< "}\r\n"
+		<< "    .container {\r\n"
+		<< "        padding: 20px;\r\n"
+		<< "        max-width: 480px;\r\n"
+		<< "        margin: auto;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< "h1{\r\n"
-		<< "	font - size: 1.7rem;\r\n"
-		<< "	margin - bottom: 10px;\r\n"
-		<< "}\r\n"
-		<< "\r\n";
-	outputString
-		<< ".status - card{\r\n"
-		<< "	background: var(--card);\r\n"
-		<< "	border - radius: 14px;\r\n"
-		<< "	padding: 20px;\r\n"
-		<< "	box - shadow: 0 0 10px #000a;\r\n"
-		<< "	margin - bottom: 80px;\r\n"
-		<< "}\r\n"
+		<< "    h1 {\r\n"
+		<< "        font-size: 1.7rem;\r\n"
+		<< "        margin-bottom: 10px;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< ".routine - number{\r\n"
-		<< "	font - size: 3rem;\r\n"
-		<< "	font - weight: bold;\r\n"
-		<< "	margin: 10px 0;\r\n"
-		<< "}\r\n"
+		<< "    .status-card {\r\n"
+		<< "        background: var(--card);\r\n"
+		<< "        border-radius: 14px;\r\n"
+		<< "        padding: 20px;\r\n"
+		<< "        box-shadow: 0 0 10px #000a;\r\n"
+		<< "        margin-bottom: 80px;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< ".ip{\r\n"
-		<< "	font - size: 0.9rem;\r\n"
-		<< "	opacity: 0.7;\r\n"
-		<< "}\r\n"
+		<< "    .routine-number {\r\n"
+		<< "        font-size: 3rem;\r\n"
+		<< "        font-weight: bold;\r\n"
+		<< "        margin: 10px 0;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< "/* Skip Button (fixed bottom) */\r\n"
-		<< ".skip - bar{\r\n"
-		<< "	position: fixed;\r\n"
-		<< "	bottom : 0;\r\n"
-		<< "	left : 0;\r\n"
-		<< "	right : 0;\r\n"
-		<< "	padding: 18px;\r\n"
-		<< "	background: var(--card);\r\n"
-		<< "	box - shadow: 0 - 2px 10px #000a;\r\n"
-		<< "}\r\n"
-		<< "\r\n";
-	outputString
-		<< "button{\r\n"
-		<< "	width: 90 %;\r\n"
-		<< "	max - width: 350px;\r\n"
-		<< "	font - size: 1.4rem;\r\n"
-		<< "	padding: 16px;\r\n"
-		<< "	border - radius: 12px;\r\n"
-		<< "	border: none;\r\n"
-		<< "	background: var(--accent);\r\n"
-		<< "	color: var(--btn - text);\r\n"
-		<< "	font - weight: bold;\r\n"
-		<< "	transition: 0.15s;\r\n"
-		<< "}\r\n"
+		<< "    .ip {\r\n"
+		<< "        font-size: 0.9rem;\r\n"
+		<< "        opacity: 0.7;\r\n"
+		<< "    }\r\n"
 		<< "\r\n"
-		<< "button:active{\r\n"
-		<< "	background: var(--accent2);\r\n"
-		<< "	transform: scale(0.98);\r\n"
-		<< "}\r\n"
+		<< "    /* Skip Button (fixed bottom) */\r\n"
+		<< "    .skip-bar {\r\n"
+		<< "        position: fixed;\r\n"
+		<< "        bottom: 0;\r\n"
+		<< "        left: 0;\r\n"
+		<< "        right: 0;\r\n"
+		<< "        padding: 18px;\r\n"
+		<< "        background: var(--card);\r\n"
+		<< "        box-shadow: 0 -2px 10px #000a;\r\n"
+		<< "    }\r\n"
+		<< "\r\n"
+		<< "    button {\r\n"
+		<< "        width: 90%;\r\n"
+		<< "        max-width: 350px;\r\n"
+		<< "        font-size: 1.4rem;\r\n"
+		<< "        padding: 16px;\r\n"
+		<< "        border-radius: 12px;\r\n"
+		<< "        border: none;\r\n"
+		<< "        background: var(--accent);\r\n"
+		<< "        color: var(--btn-text);\r\n"
+		<< "        font-weight: bold;\r\n"
+		<< "        transition: 0.15s;\r\n"
+		<< "    }\r\n"
+		<< "\r\n"
+		<< "    button:active {\r\n"
+		<< "        background: var(--accent2);\r\n"
+		<< "        transform: scale(0.98);\r\n"
+		<< "    }\r\n"
 		<< "</style>\r\n"
 		<< "\r\n"
 		<< "<script>\r\n"
-		<< "// Auto-refresh just the routine number every 2 seconds (no page reload)\r\n"
-		<< "setInterval(() = > {\r\n"
-		<< "fetch('/routine')\r\n"
-		<< "	.then(r = > r.text())\r\n"
-		<< "	.then(num = > {\r\n"
-		<< "	document.getElementById('routine').innerText = num;\r\n"
-		<< "});\r\n"
-		<< "}, 2000);\r\n"
+		<< "    // Auto-refresh just the routine number every 2 seconds (no page reload)\r\n"
+		<< "    setInterval(() => {\r\n"
+		<< "        fetch('/routine')\r\n"
+		<< "            .then(r => r.text())\r\n"
+		<< "            .then(num => {\r\n"
+		<< "                document.getElementById('routine').innerText = num;\r\n"
+		<< "            });\r\n"
+		<< "    }, 2000);\r\n"
 		<< "</script>\r\n"
 		<< "\r\n"
 		<< "</head>\r\n"
 		<< "<body>\r\n"
-		<< "\r\n";
-	outputString
-		<< "<div class = 'container'>\r\n"
-		<< "<h1>🎄 Christmas Scene Controller 🎶< / h1>\r\n"
 		<< "\r\n"
-		<< "<div class = 'status-card'>\r\n"
-		<< "<div>Current Routine : < / div>\r\n"
-		<< "<div id = 'routine' class = 'routine-number'>)\";\r\n"
+		<< "<div class='container'>\r\n"
+		<< "    <h1>&#127876; Christmas Scene Controller &#127926;</h1>\r\n"
 		<< "\r\n"
+		<< "    <div class='status-card'>\r\n"
+		<< "        <div>Current Routine:</div>\r\n"
+		<< "        <div id='routine' class='routine-number'>)\";\r\n\r\n"
 		<< "	html += String(CurrentRoutine);\r\n"
-		<< "\r\n"
 		<< "	html += R\"(</div>\r\n"
-		<< "<div class='ip'>Device IP: )\";\r\n"
-		<< "\r\n"
-		<< "	html += ip;\r\n"
-		<< "\r\n"
+		<< "		<div class='ip'>Device IP: )\";\r\n\r\n"
+		<< "	html += ip;\r\n\r\n"
 		<< "	html += R\"(</div>\r\n"
-		<< "</div>\r\n"
-		<< "</div>\r\n"
-		<< "\r\n"
+		<< "	</div>\r\n"
+		<< "</div>\r\n\r\n"
 		<< "<div class='skip-bar'>\r\n"
-		<< "<form action='/skip' method='POST'>\r\n"
-		<< "<button type='submit'>Skip to Next Routine ➤</button>\r\n"
-		<< "</form>\r\n"
+		<< "    <form action='/skip' method='POST'>\r\n"
+		<< "        <button type='submit'>Skip to Next Routine &#10148;</button>\r\n"
+		<< "    </form>\r\n"
 		<< "</div>\r\n"
 		<< "\r\n"
 		<< "</body>\r\n"
 		<< "</html>\r\n"
-		<< ")\";" 
-		<< "\r\n" 
-		<< "	return html;\r\n" 
+		<< ")\";\r\n"
+		<< "	return html;\r\n"
 		<< "}\r\n";
 
+	// End html content
+		
 	if (Options.bPrettyPrint) {
 		outputString 
 			<< "// -------------------------------------------------------------\r\n"
@@ -1882,7 +1896,12 @@ std::string GenerateESP32WebInterfaceModuleCode()
 			<< "// Simple endpoint returning only the current routine number\r\n";
 	}
 
-	outputString << "void handleRoutine() {\r\n"
+	outputString
+		<< "void RequestWebSkip() {\r\n"
+		<< "	 WebSkipRequested = true;\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "void handleRoutine() {\r\n"
 		<< "	server.send(200, \"text/plain\", String(CurrentRoutine));\r\n"
 		<< "}\r\n"
 		<< "\r\n"
@@ -2080,7 +2099,12 @@ std::string GenerateCode()
 	
 	// Motor current variables
 	if (!Options.trainPinLeft.empty()) {
-		outputString << "uint8_t motor_current_limit = 35;\r\nuint8_t motor_current_limit_L2R = 24;\r\nuint8_t motor_current_limit_R2L = 24;\r\n";
+		outputString 
+			<< "uint8_t motor_current_limit = " << (Options.bUseChristmasTrainSetup ? "50" : "35") << ";\r\n"
+			<< "uint8_t motor_current_limit_L2R = " << (Options.bUseChristmasTrainSetup ? "65" : "24") << ";\r\n"
+			<< "uint8_t motor_current_limit_R2L = "<< (Options.bUseChristmasTrainSetup ? "50" : "24") << ";\r\n"
+			<< "int avgdly = 500;" << (Options.bPrettyPrint ? " // micro seconds delay between motor current readings for averaging" : "") << "\r\n"
+			<< "int avg_count = 100;" << (Options.bPrettyPrint ? " // number of readings to average for motor current" : "") << "\r\n";
 	}
 
 	// NEW CODE GENERATED
@@ -2259,8 +2283,11 @@ std::string GenerateCode()
 			<< "    }\r\n"
 			<< "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
 			<< "	Serial.println(\"Done skipping!\");\r\n"
-			<< "	#endif\r\n"
-			<< "    return nextRoutine;\r\n"
+			<< "	#endif\r\n";
+		if (useESP32Board) {
+			outputString << "	CurrentRoutine = nextRoutine;" << (Options.bPrettyPrint ? "	// added to update current routine for web server" : "") << "\r\n";
+		}
+		outputString << "    return nextRoutine;\r\n"
 			<< "}";
 
 		outputString << extraLine;
@@ -2290,7 +2317,7 @@ std::string GenerateCode()
 	}
 	bool* pMotionSenseBoolPin = GetBoolFromPinStr(Options.motionSensorPin);
 	// Setup
-	outputString << "void setup()\r\n{\r\n	Serial.begin(9600);\r\n";
+	outputString << "void setup()\r\n{\r\n	Serial.begin(" << (useESP32Board ? "115200" : "9600") << ");\r\n";
 	for (int i = 0; i < NUM_A_PINS; ++i)
 	{
 		// Skip A6 if legacy option enabled
@@ -2339,7 +2366,9 @@ std::string GenerateCode()
 		const int maxTrainInit = Options.trainResetDuration <= 0 ? 20000 : Options.trainResetDuration;
 		//if (Options.trainResetDuration <= 0) {
 			// Auto-initialize train using motor avg
-		outputString << "    #ifdef DEBUG_TRAIN\r\n"
+		outputString 
+			<< (useESP32Board ? "	Serial.println(\"Change to actual file name.ino\");\r\n" : "")
+			<< "    #ifdef DEBUG_TRAIN\r\n"
 			<< "        Serial.println(\"Resetting train to designated side...\");\r\n"
 			<< "    #endif\r\n"
 			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);      // Make sure train direction is L to R\r\n"
@@ -2364,10 +2393,16 @@ std::string GenerateCode()
 			<< "        motorAvg = 0;\r\n"
 			<< "        motorAvg1 = 0;\r\n"
 			<< "        time1 = millis();\r\n"
-			<< "        for (int i = 0; i < 500; i++) {\r\n"
-			<< "            motorAvg1 = analogRead("<< Options.motorVoltagePin <<");\r\n"
-			<< "            motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
-			<< "            delay(1); // Small delay between readings to ensure stable sampling\r\n"
+			<< "        for (int i = 0; i < avg_count; i++) {\r\n"
+			<< "            motorAvg1 = analogRead(" << Options.motorVoltagePin << ");\r\n"
+			<< "            motorAvg = (motorAvg + motorAvg1) / 2;\r\n";
+		if (Options.bUseChristmasTrainSetup) {
+			outputString << "            delayMicroseconds(avgdly); // Small delay between readings to ensure stable sampling\r\n";
+		}
+		else {
+			outputString << "            delay(1); // Small delay between readings to ensure stable sampling\r\n";
+		}
+		outputString
 			<< "        }\r\n"
 			<< "        time2 = millis() - time1;\r\n"
 			<< "\r\n"
@@ -2504,7 +2539,8 @@ std::string GenerateCode()
 			<< "			delay(100);\r\n			uint8_t motorAvg = 0;\r\n			uint8_t motorAvg1 = 0;\r\n"
 			<< "			for (int mi = 0; mi < 50; mi++) {\r\n"
 			<< "				motorAvg1 = analogRead(" << Options.motorVoltagePin << ");\r\n"
-			<< "				delay(1);\r\n				if (motorAvg1 >= 25) motorAvg1 = 25;\r\n"
+			<< "				" << (Options.bUseChristmasTrainSetup ? "delayMicroseconds(avgdly)"  : "delay(1)") << ";\r\n"
+			<< "				" << (Options.bUseChristmasTrainSetup ? "//" : "") << "if (motorAvg1 >= 25) motorAvg1 = 25;\r\n"
 			<< "				motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
 			<< "			}\r\n"
 			<< "			#ifdef DEBUG_TRAIN\r\n			Serial.print(\"Average Motor Current: \");\r\n			Serial.println(motorAvg);\r\n			#endif\r\n\r\n"

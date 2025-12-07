@@ -120,6 +120,7 @@
 #define ID_DEBUG_SKIPROUTINE            32854
 #define ID_GENERATEDCODE_USEESP32       32855
 #define IDM_GENERATEDCODE_USE_ESP_BOARD 32856
+#define ID_GENERATEDCODE_USECHRISTMASTRAINSETUP 32857
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -128,7 +129,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        134
-#define _APS_NEXT_COMMAND_VALUE         32857
+#define _APS_NEXT_COMMAND_VALUE         32858
 #define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

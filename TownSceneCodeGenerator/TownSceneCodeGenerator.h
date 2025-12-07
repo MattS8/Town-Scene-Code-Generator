@@ -97,7 +97,7 @@ public:
 class GenerationOptions
 {
 public:
-	bool bPrettyPrint = true;									// Should generated code be properly spaced and easier to read (default set to TRUE in v2.1)?
+	bool bPrettyPrint = true;									// Should generated code be properly spaced and easier to read (default set to TRUE in v2.1)
 	bool bAddDebugStatements = false;							// #Defines DEBUG in generated code, causing Arduino to print out some helpful debug statements
 	bool bDebugTrain = false;									// Adds debug statements to generated code to debug train pin functionality (added in v2.0)
 	bool bDebugSkipRoutine = false;								// Adds debug statements to generated code to debug "Skip Routine" and randomization functionality (added in v2.0)
@@ -109,6 +109,7 @@ public:
 	bool bUseLowPrecisionTimes = false;							// Should use unsigned ints instead of unsigned longs for time stores
 	bool bUseLegacyA6 = false;									// Preserves unknown feature of previous versions where A6 was hardcoded to be unused INPUT
 	bool bUseLegacyA7 = false;									// Preserves unknown feature of previous versions where A7 was hardcoded to be unused INPUT_PULLUP
+	bool bUseChristmasTrainSetup = true;						// Uses motor values specifically for the Christmas town scene setup (added in v2.2)
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player
@@ -147,19 +148,46 @@ void PrintToOutputLog(std::string statement)
 
 //---------------------------------------------------------------------------
 
+// Convert UTF-8 string to UTF-16 (wide string)
+std::wstring UTF8ToUTF16(const std::string& utf8)
+{
+	if (utf8.empty()) return std::wstring();
+	
+	int size_needed = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), (int)utf8.size(), NULL, 0);
+	if (size_needed <= 0) return std::wstring();
+	
+	std::wstring utf16(size_needed, 0);
+	MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), (int)utf8.size(), &utf16[0], size_needed);
+	return utf16;
+}
+
+// Convert UTF-16 (wide string) to UTF-8 string
+std::string UTF16ToUTF8(const std::wstring& utf16)
+{
+	if (utf16.empty()) return std::string();
+	
+	int size_needed = WideCharToMultiByte(CP_UTF8, 0, utf16.c_str(), (int)utf16.size(), NULL, 0, NULL, NULL);
+	if (size_needed <= 0) return std::string();
+	
+	std::string utf8(size_needed, 0);
+	WideCharToMultiByte(CP_UTF8, 0, utf16.c_str(), (int)utf16.size(), &utf8[0], size_needed, NULL, NULL);
+	return utf8;
+}
+
+//---------------------------------------------------------------------------
+
 std::string GetStringFromWindow(HWND hwnd)
 {
 	std::vector<wchar_t> buf;
-	std::string temp;
 	int len;
 
 	len = GetWindowTextLengthW(hwnd) + 1;
 	if (len > 1) {
 		buf = std::vector<wchar_t>(len);
 		GetWindowTextW(hwnd, &buf[0], len);
-		temp = std::string(buf.begin(), buf.end());
-		temp.pop_back();
-		return temp;
+		// Properly convert UTF-16 to UTF-8
+		std::wstring utf16(buf.begin(), buf.end() - 1); // Remove null terminator
+		return UTF16ToUTF8(utf16);
 	}
 
 	return "";
