@@ -57,6 +57,7 @@ int RoutineBtnHeight = 25;
 int width = 1300;
 int height = 1300;
 int RequiredFieldHeight = 150;
+bool bFirstDraw = true;
 
 HWND gHWND;
 HWND hMP3DriveLetter;
@@ -1305,6 +1306,15 @@ void AddControls(HWND handler)
 	NextItemW += 100 + LABEL_INPUT_GAP;
 	hWifiPass = CreateWindowW(L"Edit", L"", WS_VISIBLE | WS_CHILD | ES_WANTRETURN | ES_AUTOHSCROLL | WS_BORDER, NextItemW, NextItemH, INPUT_WIDTH_STANDARD, InputHeight, handler, NULL, NULL, NULL);
 	SendMessage(hWifiPass, WM_SETFONT, (WPARAM)g_InputFont, TRUE);
+	if (bFirstDraw)
+	{
+		bFirstDraw = false;
+		// Set the text of the password to what is stored in Options.wifiPassword
+		SetWindowTextW(hWifiPass, std::wstring(Options.wifiPassword.begin(), Options.wifiPassword.end()).c_str());
+		// Set the text of the ssid to what is stored in Options.wifiSSID
+		SetWindowTextW(hWifiSSID, std::wstring(Options.wifiSSID.begin(), Options.wifiSSID.end()).c_str());
+	}
+
 
 	// Bottom Bar
 	int bottomStart = esp32GroupY + esp32GroupHeight + (SECTION_SPACING * 2);
