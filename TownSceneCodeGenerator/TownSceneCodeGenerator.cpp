@@ -1948,6 +1948,8 @@ std::string GenerateESP32WebInterfaceModuleCode()
 		<< "	Serial.println(\"WiFi Connected.\");\r\n"
 		<< "	Serial.print(\"IP Address: \");\r\n"
 		<< "	Serial.println(WiFi.localIP());\r\n"
+		<< "	Serial.print(\"MAC: \");\r\n"
+		<< "	Serial.println(WiFi.macAddress());\r\n"
 		<< "\r\n"
 		<< "	// Routes\r\n"
 		<< "	server.on(\"/\", handleRoot);\r\n"
@@ -1967,6 +1969,139 @@ std::string GenerateESP32WebInterfaceModuleCode()
 		<< "void HandleWebRequests() {\r\n"
 		<< "	server.handleClient();\r\n"
 		<< "}\r\n";
+
+	return outputString.str();
+}
+
+std::string GenerateSetupCode(bool* pMotionSenseBoolPin, bool useESP32Board)
+{
+	std::stringstream outputString;
+
+	outputString 
+		<< "void setup()\r\n"
+		<< "{\r\n"
+		<< "	Serial.begin(" << (useESP32Board ? "115200" : "9600") << ");\r\n";
+
+	// Setup pins
+	for (int i = 0; i < NUM_A_PINS; ++i)
+	{
+		// Skip A6 if legacy option enabled
+		if (i == 5 && Options.bUseLegacyA6)
+			continue;
+
+		if (bchA[i])
+			outputString << "	pinMode(A" << i << ", " << (pMotionSenseBoolPin == &(bchA[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
+	}
+
+	for (int i = 0; i < NUM_D_PINS; ++i)
+		if (bchD[i])
+			outputString << "	pinMode(D" << (i + 2) << ", " << (pMotionSenseBoolPin == &(bchD[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
+
+	// Setup motion sensor pin
+	if (!Options.motionSensorPin.empty())
+		outputString << "	pinMode(" << Options.motionSensorPin << ", INPUT_PULLUP);\r\n";
+
+	// Setup skip button pin
+	if (!Options.mp3SkipPin.empty())
+		outputString << "	pinMode(" << Options.mp3SkipPin << ", OUTPUT);\r\n";
+
+	// Setup mp3 volume pin
+	if (!Options.mp3VolumePin.empty())
+		outputString << "	pinMode(" << Options.mp3VolumePin << ", OUTPUT);\r\n";
+
+	if (!Options.motorVoltagePin.empty())
+		outputString << "	pinMode(" << Options.motorVoltagePin << ", INPUT);\r\n";
+
+	if (!Options.randomSeedPin.empty())
+		outputString << "	pinMode(" << Options.randomSeedPin << ", INPUT);\r\n";
+
+	if (Options.bUseLegacyA6)
+		outputString << "	pinMode(A6, INPUT);\r\n";
+	if (Options.bUseLegacyA7)
+		outputString << "	pinMode(A7, INPUT_PULLUP);\r\n";
+
+	// In the event the option to "randomly select track" is checked, we'll need to initialize randomSeed
+	if (Options.bRandomizeRoutineOrder && !Options.randomSeedPin.empty())
+		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
+
+	outputString << "	TurnAllLights(ON);\r\n";
+	if (!Options.trainPinLeft.empty()) {
+		const int maxTrainInit = Options.trainResetDuration <= 0 ? 20000 : Options.trainResetDuration;
+		//if (Options.trainResetDuration <= 0) {
+			// Auto-initialize train using motor avg
+		outputString
+			<< (useESP32Board ? "	Serial.println(\"Change to actual file name.ino\");\r\n" : "")
+			<< "    #ifdef DEBUG_TRAIN\r\n"
+			<< "        Serial.println(\"Resetting train to designated side...\");\r\n"
+			<< "    #endif\r\n"
+			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);      // Make sure train direction is L to R\r\n"
+			<< "    delay(250);\r\n"
+			<< "    digitalWrite(TrainPin, ON); // S/B A5\r\n"
+			<< "    delay(10);\r\n"
+			<< "    int startTime = millis();  // Record the start time\r\n"
+			<< "    int maxDuration = " << maxTrainInit << ";\r\n"
+			<< "    unsigned int time1;\r\n"
+			<< "    unsigned int time2;\r\n"
+			<< "    uint8_t motoravgmax = 0;\r\n"
+			<< "    uint8_t motoravgmin = 255;\r\n"
+			<< "    uint8_t motorAvg = 0;\r\n"
+			<< "    uint8_t motorAvg1 = 0;\r\n";
+		if (Options.bRandomizeRoutineOrder) {
+			outputString << "    for (int ii = 0; ii < NUM_ROUTINES; ii++) {  // resets used routine array to all false\r\n"
+				<< "        used_routine[ii] = false;\r\n"
+				<< "    }\r\n"
+				<< "    all_used_up = false;        // reset all routine used variable\r\n";
+		}
+		outputString
+			<< "    while ((millis() - startTime < maxDuration) && (motorAvg <= motor_current_limit)) {\r\n"
+			<< "        motorAvg = 0;\r\n"
+			<< "        motorAvg1 = 0;\r\n"
+			<< "        time1 = millis();\r\n"
+			<< "		long sum = 0;\r\n"
+			<< "		for (int i = 0; i < avg_count; i++) {\r\n"
+			<< "			sum += analogRead(" << Options.motorVoltagePin << ");\r\n"
+			<< "			delayMicroseconds(avgdly);\r\n"
+			<< "		}\r\n"
+			<< "		motorAvg = sum / avg_count;\r\n"
+			<< "        time2 = millis() - time1;\r\n"
+			<< "\r\n"
+			<< "        #ifdef DEBUG_TRAIN\r\n"
+			<< "            Serial.print(\"Time for averaging: \");\r\n"
+			<< "            Serial.println(time2);\r\n"
+			<< "            if (motorAvg >= motoravgmax)\r\n"
+			<< "                motoravgmax = motorAvg;\r\n"
+			<< "            if (motorAvg <= motoravgmin)\r\n"
+			<< "                motoravgmin = motorAvg;\r\n"
+			<< "            Serial.print(\"Max Average Current: \");\r\n"
+			<< "            Serial.print(motoravgmax);\r\n"
+			<< "            Serial.print(\", Min Average Current: \");\r\n"
+			<< "            Serial.print(motoravgmin);\r\n"
+			<< "            Serial.print(\", Average Motor Current: \");\r\n"
+			<< "            Serial.println(motorAvg);\r\n"
+			<< "        #endif\r\n"
+			<< "    }\r\n"
+			<< "\r\n"
+			<< "    digitalWrite(TrainPin, OFF);\r\n"
+			<< "    digitalWrite(" << Options.trainPinRight << ", ON);" << (Options.bPrettyPrint ? "	// Back train off the stop a bit\r\n" : "\r\n")
+			<< "    delay(250);\r\n"
+			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "    while (millis() - startTime < maxDuration) {" << (Options.bPrettyPrint ? "	// Use this remaining train initialization time for all lights on at startup\r\n" : "\r\n")
+			<< "        delay(100);\r\n"
+			<< "    }\r\n"
+			<< "    #ifdef DEBUG_TRAIN\r\n"
+			<< "        Serial.println(\"Finished resetting train!\");\r\n"
+			<< "    #endif\r\n";
+	}
+	else {
+		// Ignore train setup - induce 7s delay
+		outputString << "	delay(7000);\r\n";
+	}
+	outputString << "	TurnAllLights(OFF);\r\n";
+	if (useESP32Board)
+		outputString << "	StartWebServer();\r\n";
+	outputString 
+		<< "}\r\n"
+		<< "\r\n";
 
 	return outputString.str();
 }
@@ -1996,7 +2131,7 @@ std::string GenerateDefines(bool useESP32Board)
 			<< "#define D10 13" << "\r\n"
 			<< "#define D11 22" << "\r\n"
 			<< "#define D12 15" << "\r\n"
-			<< "#define D13 16" << "\r\n";
+			<< "#define D13 19" << "\r\n";
 		if (Options.bPrettyPrint)
 			outputString << "\r\n// ----- Nano analog pin numbers remapped as general I/O -----" << "\r\n";
 		outputString << "#define A0 2" << "\r\n"
@@ -2029,6 +2164,155 @@ std::string GenerateDefines(bool useESP32Board)
 	if (Options.bDebugSkipRoutine)
 		outputString << "#define DEBUG_SKIP_ROUTINE\r\n";
 
+	return outputString.str();
+}
+
+std::string GenerateLoopCode(bool useESP32Board)
+{
+	std::stringstream outputString;
+	outputString 
+		<< "void loop()\r\n"
+		<< "{\r\n";
+	if (!Options.motionSensorPin.empty())
+		outputString << "	while (analogRead(PMotionSense) < 500) ;\r\n";
+	if (Options.bUseHalloweenMP3Controls) 
+		outputString << "	CurrentRoutine = 0;\r\n	digitalWrite(MP3SkipPin, HIGH);\r\n";
+	else
+		outputString << "	CurrentRoutine = SkipToRoutine();\r\n";
+
+	if (useESP32Board) {
+		if (Options.bPrettyPrint)
+			outputString 
+			<< "	// Web interface skip request\r\n";
+		outputString 
+			<< "	if (WebSkipRequested) {" << "\r\n"
+			<< "		WebSkipRequested = false;" << "\r\n"
+			<< "		CurrentRoutine = SkipToRoutine();" << "\r\n"
+			<< "	}" << "\r\n"
+			<< (Options.bPrettyPrint ? "	// Handle new web requests\r\n" : "")
+			<< "	HandleWebRequests();" << "\r\n";
+	}
+
+	// Commented out debug code
+	outputString 
+		<< "/* ---------------------------------------------------------------------------------------------------- */\r\n"
+		<< "// This code is used only to force a specific routine to run.\r\n"
+		<< "// 1 skip = Set 1, Routine 1\r\n"
+		<< "    // CurrentRoutine = 1;\r\n"
+		<< "    // int numberOfSkips = 1;\r\n"
+		<< "    // for (int i = 0; i < numberOfSkips; i++)\r\n"
+		<< "    // {\r\n"
+		<< "    //     Serial.print(\" skipping...)\");\r\n"
+		<< "    //     digitalWrite(MP3SkipPin, HIGH);\r\n"
+		<< "    //     delay(150);\r\n"
+		<< "    //     digitalWrite(MP3SkipPin, LOW);\r\n"
+		<< "    //     delay(250);\r\n"
+		<< "    // }\r\n"
+		<< "    // Serial.println(\"Done skipping)\");\r\n"
+		<< "/* ---------------------------------------------------------------------------------------------------- */\r\n";
+
+	// Debug routine info
+	outputString 
+		<< "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
+		<< "		Serial.print(\"Current Routine: \");\r\n"
+		<< "		Serial.println(CurrentRoutine);\r\n"
+		<< "	#endif\r\n";
+
+	outputString 
+		<< "	StartTime = millis();\r\n"
+		<< "	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n"
+		<< "	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n"
+		<< "	do\r\n"
+		<< "	{\r\n"
+		<< "		DeltaTime = millis() - StartTime;\r\n";
+
+	if (!Options.mp3VolumePin.empty())
+		outputString << "		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
+
+	if (useESP32Board) {
+		outputString << (Options.bPrettyPrint ? "		// This keeps web server responsive\r\n" : "")
+			<< "		HandleWebRequests();" << "\r\n"
+			<< "		if (WebSkipRequested) {" << "\r\n"
+			<< "			WebSkipRequested = false;\r\n"
+			<< "			CurrentRoutine = SkipToRoutine();\r\n"
+			<< "			break;" << (Options.bPrettyPrint ? "	// Break out of running routine immediately" : "") << "\r\n"
+			<< "		}\r\n";
+	}
+	outputString 
+		<< "		if (allOffLight != NULL)\r\n"
+		<< "			AllLightsOff(allOffLight);\r\n"
+		<< "		if (allOnLight != NULL)\r\n"
+		<< "			bAllLightsOn = AllLightsOn(allOnLight);\r\n"
+		<< "		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n"
+		<< "			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n\r\n";
+
+	// Train train motor state
+	if (!Options.trainPinLeft.empty()) {
+		outputString 
+			<< "		int pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
+			<< "		int pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
+			<< "		if (pinStateR2L == HIGH || pinStateL2R == HIGH) {\r\n"
+			<< "			if (pinStateL2R == HIGH)\r\n"
+			<< "				motor_current_limit = motor_current_limit_L2R;\r\n"
+			<< "			if (pinStateR2L == HIGH)\r\n"
+			<< "				motor_current_limit = motor_current_limit_R2L;\r\n"
+			<< "			delay(100);\r\n"
+			<< "			uint8_t motorAvg = 0;\r\n"
+			<< "			uint8_t motorAvg1 = 0;\r\n"
+			<< "\r\n"
+			<< "			long sum = 0;\r\n"
+			<< "			for (int i = 0; i < avg_count; i++) {\r\n"
+			<< "				sum += analogRead(" << Options.motorVoltagePin << ");\r\n"
+			<< "				delayMicroseconds(avgdly);\r\n"
+			<< "			}\r\n"
+			<< "			motorAvg = sum / avg_count;\r\n"
+			<< "			#ifdef DEBUG_TRAIN\r\n"
+			<< "				Serial.print(\"Average Motor Current: \");\r\n"
+			<< "				Serial.println(motorAvg);\r\n"
+			<< "			#endif\r\n"
+			<< "\r\n"
+			<< "			if (motorAvg >= motor_current_limit) {\r\n"
+			<< "				pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
+			<< "				pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
+			<< "				if (pinStateL2R == HIGH) {\r\n"
+			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "					digitalWrite(" << Options.trainPinLeft << ", ON);\r\n"
+			<< "					delay(250);\r\n"
+			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n"
+			<< "					#ifdef DEBUG_TRAIN\r\n"
+			<< "						Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
+			<< "					#endif\r\n"
+			<< "					delay(2000);\r\n"
+			<< "				}\r\n"
+			<< "				if (pinStateR2L == HIGH) {\r\n"
+			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n"
+			<< "					digitalWrite(" << Options.trainPinRight << ", ON);\r\n"
+			<< "					delay(250);\r\n"
+			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "					#ifdef DEBUG_TRAIN\r\n"
+			<< "						Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
+			<< "					#endif\r\n"
+			<< "					delay(2000);\r\n"
+			<< "				}\r\n"
+			<< "			}\r\n"
+			<< "		}\r\n";
+	}
+
+	outputString 
+		<< "	} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "((ulong)routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n"
+		<< "	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n"
+		<< "		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
+	if (Options.bUseHalloweenMP3Controls) {
+		outputString << "	digitalWrite(MP3SkipPin, LOW);\r\n";
+	}
+
+	outputString << "}\r\n";
+	outputString << "\r\n";
+
+	// ESP32 Web Interface Module
+	if (useESP32Board) {
+		outputString << GenerateESP32WebInterfaceModuleCode();
+	}
 	return outputString.str();
 }
 
@@ -2110,11 +2394,11 @@ std::string GenerateCode()
 	// Motor current variables
 	if (!Options.trainPinLeft.empty()) {
 		outputString 
-			<< "uint8_t motor_current_limit = " << (Options.bUseChristmasTrainSetup ? "50" : "35") << ";\r\n"
-			<< "uint8_t motor_current_limit_L2R = " << (Options.bUseChristmasTrainSetup ? "65" : "24") << ";\r\n"
-			<< "uint8_t motor_current_limit_R2L = "<< (Options.bUseChristmasTrainSetup ? "50" : "24") << ";\r\n"
+			<< "uint8_t motor_current_limit = " << (Options.bUseChristmasTrainSetup ? "10" : "35") << ";\r\n"
+			<< "uint8_t motor_current_limit_L2R = " << (Options.bUseChristmasTrainSetup ? "10" : "24") << ";\r\n"
+			<< "uint8_t motor_current_limit_R2L = "<< (Options.bUseChristmasTrainSetup ? "10" : "24") << ";\r\n"
 			<< "int avgdly = 500;" << (Options.bPrettyPrint ? " // micro seconds delay between motor current readings for averaging" : "") << "\r\n"
-			<< "int avg_count = 100;" << (Options.bPrettyPrint ? " // number of readings to average for motor current" : "") << "\r\n";
+			<< "int avg_count = 10;" << (Options.bPrettyPrint ? " // number of readings to average for motor current" : "") << "\r\n";
 	}
 
 	// NEW CODE GENERATED
@@ -2325,273 +2609,13 @@ std::string GenerateCode()
 		outputString << " *                                          Arduino Functions                                          \r\n";
 		outputString << " * ---------------------------------------------------------------------------------------------------- */\r\n";
 	}
-	bool* pMotionSenseBoolPin = GetBoolFromPinStr(Options.motionSensorPin);
+
 	// Setup
-	outputString << "void setup()\r\n{\r\n	Serial.begin(" << (useESP32Board ? "115200" : "9600") << ");\r\n";
-	for (int i = 0; i < NUM_A_PINS; ++i)
-	{
-		// Skip A6 if legacy option enabled
-		if (i == 5 && Options.bUseLegacyA6)
-			continue;
-
-		if (bchA[i])
-			outputString << "	pinMode(A" << i << ", " << (pMotionSenseBoolPin == &(bchA[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
-	}
-
-	for (int i = 0; i < NUM_D_PINS; ++i)
-		if (bchD[i])
-			outputString << "	pinMode(D" << (i + 2) << ", " << (pMotionSenseBoolPin == &(bchD[i]) ? "INPUT" : "OUTPUT") << ");\r\n";
-
-	// Setup motion sensor pin
-	if (!Options.motionSensorPin.empty())
-		outputString << "	pinMode(" << Options.motionSensorPin << ", INPUT_PULLUP);\r\n";
-
-	// Setup skip button pin
-	if (!Options.mp3SkipPin.empty())
-		outputString << "	pinMode(" << Options.mp3SkipPin << ", OUTPUT);\r\n";
-	
-	// Setup mp3 volume pin
-	if (!Options.mp3VolumePin.empty())
-		outputString << "	pinMode(" << Options.mp3VolumePin << ", OUTPUT);\r\n";
-
-	//outputString << "	pinMode(D2, OUTPUT);\r\n	pinMode(D3, OUTPUT);\r\n	pinMode(D4, OUTPUT);\r\n	pinMode(D5, OUTPUT);\r\n	pinMode(D6, OUTPUT);\r\n	pinMode(D7, OUTPUT);\r\n	pinMode(D8, OUTPUT);\r\n	pinMode(D9, OUTPUT);\r\n	pinMode(D10, OUTPUT);\r\n	pinMode(D11, OUTPUT);\r\n	pinMode(D12, OUTPUT);\r\n	pinMode(D13, OUTPUT);\r\n	pinMode(A0, OUTPUT);\r\n	pinMode(A1, OUTPUT);\r\n	pinMode(A2, OUTPUT);\r\n	pinMode(A3, OUTPUT);\r\n	pinMode(A4, OUTPUT);\r\n	pinMode(A5, OUTPUT);\r\n	pinMode(A6, INPUT);\r\n	pinMode(A7, INPUT_PULLUP);\r\n	TurnAllLights(ON);\r\n";
-	
-	if (!Options.motorVoltagePin.empty())
-		outputString << "	pinMode(" << Options.motorVoltagePin << ", INPUT);\r\n";
-
-	if (!Options.randomSeedPin.empty())
-		outputString << "	pinMode(" << Options.randomSeedPin << ", INPUT);\r\n";
-
-	if (Options.bUseLegacyA6)
-		outputString << "	pinMode(A6, INPUT);\r\n";
-	if (Options.bUseLegacyA7)
-		outputString << "	pinMode(A7, INPUT_PULLUP);\r\n";
-
-	// In the event the option to "randomly select track" is checked, we'll need to initialize randomSeed
-	if (Options.bRandomizeRoutineOrder && !Options.randomSeedPin.empty())
-		outputString << "	randomSeed(analogRead(" << Options.randomSeedPin << "));\r\n";
-
-	outputString << "	TurnAllLights(ON);\r\n";
-	if (!Options.trainPinLeft.empty()) {
-		const int maxTrainInit = Options.trainResetDuration <= 0 ? 20000 : Options.trainResetDuration;
-		//if (Options.trainResetDuration <= 0) {
-			// Auto-initialize train using motor avg
-		outputString 
-			<< (useESP32Board ? "	Serial.println(\"Change to actual file name.ino\");\r\n" : "")
-			<< "    #ifdef DEBUG_TRAIN\r\n"
-			<< "        Serial.println(\"Resetting train to designated side...\");\r\n"
-			<< "    #endif\r\n"
-			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);      // Make sure train direction is L to R\r\n"
-			<< "    delay(250);\r\n"
-			<< "    digitalWrite(TrainPin, ON); // S/B A5\r\n"
-			<< "    delay(10);\r\n"
-			<< "    int startTime = millis();  // Record the start time\r\n"
-			<< "    int maxDuration = " << maxTrainInit << ";\r\n"
-			<< "    unsigned int time1;\r\n"
-			<< "    unsigned int time2;\r\n"
-			<< "    uint8_t motoravgmax = 0;\r\n"
-			<< "    uint8_t motoravgmin = 255;\r\n"
-			<< "    uint8_t motorAvg = 0;\r\n"
-			<< "    uint8_t motorAvg1 = 0;\r\n";
-		if (Options.bRandomizeRoutineOrder) {
-			outputString << "    for (int ii = 0; ii < NUM_ROUTINES; ii++) {  // resets used routine array to all false\r\n"
-				<< "        used_routine[ii] = false;\r\n"
-				<< "    }\r\n"
-				<< "    all_used_up = false;        // reset all routine used variable\r\n";
-		}
-		outputString << "    while ((millis() - startTime < maxDuration) && (motorAvg <= motor_current_limit)) {\r\n"
-			<< "        motorAvg = 0;\r\n"
-			<< "        motorAvg1 = 0;\r\n"
-			<< "        time1 = millis();\r\n"
-			<< "        for (int i = 0; i < avg_count; i++) {\r\n"
-			<< "            motorAvg1 = analogRead(" << Options.motorVoltagePin << ");\r\n"
-			<< "            motorAvg = (motorAvg + motorAvg1) / 2;\r\n";
-		if (Options.bUseChristmasTrainSetup) {
-			outputString << "            delayMicroseconds(avgdly); // Small delay between readings to ensure stable sampling\r\n";
-		}
-		else {
-			outputString << "            delay(1); // Small delay between readings to ensure stable sampling\r\n";
-		}
-		outputString
-			<< "        }\r\n"
-			<< "        time2 = millis() - time1;\r\n"
-			<< "\r\n"
-			<< "        #ifdef DEBUG_TRAIN\r\n"
-			<< "            Serial.print(\"Time for averaging: \");\r\n"
-			<< "            Serial.println(time2);\r\n"
-			<< "            if (motorAvg >= motoravgmax)\r\n"
-			<< "                motoravgmax = motorAvg;\r\n"
-			<< "            if (motorAvg <= motoravgmin)\r\n"
-			<< "                motoravgmin = motorAvg;\r\n"
-			<< "            Serial.print(\"Max Average Current: \");\r\n"
-			<< "            Serial.print(motoravgmax);\r\n"
-			<< "            Serial.print(\", Min Average Current: \");\r\n"
-			<< "            Serial.print(motoravgmin);\r\n"
-			<< "            Serial.print(\", Average Motor Current: \");\r\n"
-			<< "            Serial.println(motorAvg);\r\n"
-			<< "        #endif\r\n"
-			<< "    }\r\n"
-			<< "\r\n"
-			<< "    digitalWrite(TrainPin, OFF);\r\n"
-			<< "    digitalWrite(" << Options.trainPinRight << ", ON);       // Back train off the stop a bit\r\n"
-			<< "    delay(250);\r\n"
-			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
-			<< "    while (millis() - startTime < maxDuration) {  // Use this remaining train initialization time for all lights on at startup\r\n"
-			<< "        delay(100);\r\n"
-			<< "    }\r\n"
-			<< "    #ifdef DEBUG_TRAIN\r\n"
-			<< "        Serial.println(\"Finished resetting train!\");\r\n"
-			<< "    #endif";
-			
-			//outputString << "	#ifdef DEBUG_TRAIN\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n"
-			//	<< "	digitalWrite(" << Options.trainPinRight << ", OFF);\r\n	delay(250);\r\n	digitalWrite(TrainPin, ON);\r\n	delay(10);\r\n"
-			//	<< "	int startTime = millis();\r\n	int maxDuration = 20000;\r\n	unsigned int time1, time2;\r\n"
-			//	<< "	uint8_t motoravgmax = 0, motoravgmin = 255, motorAvg = 0, motorAvg1 = 0;\r\n"
-			//	<< "	for (int ri = 0; ri < NUM_ROUTINES; ri++) {\r\n"
-			//	<< "		used_routine[ri] = false;\r\n"
-			//	<< "	}\r\n	all_used_up = false;\r\n"
-			//	<< "	while ((millis() - startTime < maxDuration) && (motorAvg <= motor_current_limit)) {\r\n"
-			//	<< "		motorAvg = 0;\r\n		motorAvg1 = 0;\r\n		time1 = millis();\r\n		for (int i = 0; i < 500; i++) {\r\n"
-			//	<< "			motorAvg1 = analogRead(" << Options.trainMotorPin << ");\r\n			motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
-			//	<< "			delay(1);\r\n		}\r\n		time2 = millis() - time1;\r\n\r\n		#ifdef DEBUG_TRAIN\r\n"
-			//	<< "		Serial.print(\"Time for averaging: \");\r\n		Serial.println(time2);\r\n"
-			//	<< "		motorAvg = motorAvg / 500;\r\n		if (motorAvg >= motoravgmax)\r\n			motoravgmax = motorAvg;\r\n"
-			//	<< "		if (motorAvg <= motoravgmin)\r\n			motoravgmin = motorAvg;\r\n"
-			//	<< "		Serial.print(\" , Max Average Current: \");\r\n		Serial.print(motoravgmax);\r\n		Serial.print(\" , Min Average Current: \")\r\n"
-			//	<< "		Serial.print(motoravgmin);\r\n		Serial.print(\"Average Motor Current: \");\r\n		Serial.println(motorAvg);\r\n"
-			//	<< "		#endif\r\n		}\r\n\r\n		digitalWrite(TrainPin, OFF);\r\n		digitalWrite(" << Options.trainPinRight << ", ON);\r\n"
-			//	<< "		delay(250);\r\n		digitalWrite(" << Options.trainPinRight << ", OFF);\r\n		while (millis() - startTime < maxDuration) {\r\n"
-			//	<< "			delay(100);\r\n		}\r\n		#ifdef DEBUG_TRAIN\r\n		Serial.println(\"Finished resetting train!\");\r\n		#endif\r\n";
-		//}
-		//else {
-		//	// Initialize train using hardcoded reset duration
-		//	outputString << "	#ifdef DEBUG_TRAIN\r\n	Serial.println(\"Resetting train to designated side...\");\r\n	#endif\r\n	digitalWrite(TrainPin, ON);\r\n	delay(" << Options.trainResetDuration << ");\r\n	digitalWrite(TrainPin, OFF);\r\n	#ifdef DEBUG\r\n	Serial.println(\"Finished resetting train!\");\r\n	#endif\r\n";
-		//}
-	}
-	else {
-		// Ignore train setup - induce 7s delay
-		outputString << "	delay(7000);\r\n";
-	}
-	outputString << "	TurnAllLights(OFF);\r\n";
-	if (useESP32Board)
-		outputString << "	StartWebServer();";
-	outputString << "}\r\n";
-	outputString << extraLine;
-
-	
+	bool* pMotionSenseBoolPin = GetBoolFromPinStr(Options.motionSensorPin);
+	outputString << GenerateSetupCode(pMotionSenseBoolPin, useESP32Board);
 
 	// Loop
-	outputString << "void loop()\r\n{\r\n";
-	if (!Options.motionSensorPin.empty())
-		outputString << "\twhile (analogRead(PMotionSense) < 500) ;\r\n";
-	if (Options.bUseHalloweenMP3Controls) {
-		outputString << "	CurrentRoutine = 0;\r\n	digitalWrite(MP3SkipPin, HIGH);\r\n";
-	}
-	else {
-		outputString << "	CurrentRoutine = SkipToRoutine();\r\n";
-	}
-	if (useESP32Board) {
-		if (Options.bPrettyPrint)
-			outputString << "	// Web interface skip request\r\n";
-		outputString << "	if (WebSkipRequested) {" << "\r\n"
-			<< "		WebSkipRequested = false;" << "\r\n"
-			<< "		CurrentRoutine = SkipToRoutine();" << "\r\n"
-			<< "	}" << "\r\n"
-			<< (Options.bPrettyPrint ? "	// Handle new web requests\r\n" : "")
-			<< "	HandleWebRequests();" << "\r\n";
-	}
-
-	// Commented out debug code
-	outputString << "/* ---------------------------------------------------------------------------------------------------- */\r\n"
-		<< "// This code is used only to force a specific routine to run.\r\n"
-		<< "// 1 skip = Set 1, Routine 1\r\n"
-		<< "    // CurrentRoutine = 1;\r\n"
-		<< "    // int numberOfSkips = 1;\r\n"
-		<< "    // for (int i = 0; i < numberOfSkips; i++)\r\n"
-		<< "    // {\r\n"
-		<< "    //     Serial.print(\" skipping...)\");\r\n"
-		<< "    //     digitalWrite(MP3SkipPin, HIGH);\r\n"
-		<< "    //     delay(150);\r\n"
-		<< "    //     digitalWrite(MP3SkipPin, LOW);\r\n"
-		<< "    //     delay(250);\r\n"
-		<< "    // }\r\n"
-		<< "    // Serial.println(\"Done skipping)\");\r\n"
-		<< "/* ---------------------------------------------------------------------------------------------------- */\r\n";
-
-	outputString << "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
-		<< "	Serial.print(\"Current Routine: \");\r\n"
-		<< "	Serial.println(CurrentRoutine);\r\n"
-		<< "	#endif\r\n";
-
-	outputString << "	StartTime = millis();\r\n	Light* allOffLight = FindLight(routines[CurrentRoutine], P_ALL_OFF);\r\n	Light* allOnLight = FindLight(routines[CurrentRoutine], P_ALL_ON);\r\n	do\r\n	{\r\n		DeltaTime = millis() - StartTime;\r\n";
-
-	if (!Options.mp3VolumePin.empty())
-		outputString << "		digitalWrite(MP3VolumePin, DeltaTime < 7000 ? HIGH : LOW);\r\n";
-
-	if (useESP32Board) {
-		outputString << (Options.bPrettyPrint ? "		// This keeps web server responsive\r\n" : "")
-			<< "		HandleWebRequests();" << "\r\n"
-			<< "		if (WebSkipRequested) {" << "\r\n"
-			<< "			WebSkipRequested = false;\r\n"
-			<< "			CurrentRoutine = SkipToRoutine();\r\n"
-			<< "			break;" << (Options.bPrettyPrint ? "	// Break out of running routine immediately" : "") << "\r\n"
-			<< "		}\r\n";
-	}
-	outputString << "		if (allOffLight != NULL)\r\n			AllLightsOff(allOffLight);\r\n		if (allOnLight != NULL)\r\n			bAllLightsOn = AllLightsOn(allOnLight);\r\n		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n\r\n";
-	
-	// Train train motor state
-	if (!Options.trainPinLeft.empty()) {
-		outputString << "		int pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
-			<< "		int pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
-			<< "		if (pinStateR2L == HIGH || pinStateL2R == HIGH) {\r\n"
-			<< "			if (pinStateL2R == HIGH)\r\n				motor_current_limit = motor_current_limit_L2R;\r\n"
-			<< "			if (pinStateR2L == HIGH)\r\n				motor_current_limit = motor_current_limit_R2L;\r\n"
-			<< "			delay(100);\r\n			uint8_t motorAvg = 0;\r\n			uint8_t motorAvg1 = 0;\r\n"
-			<< "			for (int mi = 0; mi < 50; mi++) {\r\n"
-			<< "				motorAvg1 = analogRead(" << Options.motorVoltagePin << ");\r\n"
-			<< "				" << (Options.bUseChristmasTrainSetup ? "delayMicroseconds(avgdly)"  : "delay(1)") << ";\r\n"
-			<< "				" << (Options.bUseChristmasTrainSetup ? "//" : "") << "if (motorAvg1 >= 25) motorAvg1 = 25;\r\n"
-			<< "				motorAvg = (motorAvg + motorAvg1) / 2;\r\n"
-			<< "			}\r\n"
-			<< "			#ifdef DEBUG_TRAIN\r\n			Serial.print(\"Average Motor Current: \");\r\n			Serial.println(motorAvg);\r\n			#endif\r\n\r\n"
-			<< "			if (motorAvg >= motor_current_limit) {\r\n"
-			<< "				pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
-			<< "				pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
-			<< "				if (pinStateL2R == HIGH) {\r\n"
-			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n					digitalWrite(" << Options.trainPinLeft << ", ON);\r\n"
-			<< "					delay(250);\r\n"
-			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n"
-			<< "					#ifdef DEBUG_TRAIN\r\n"
-			<< "					Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
-			<< "					#endif\r\n"
-			<< "					delay(2000);\r\n"
-			<< "				}\r\n"
-			<< "				if (pinStateR2L == HIGH) {\r\n"
-			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n					digitalWrite(" << Options.trainPinRight << ", ON);\r\n"
-			<< "					delay(250);\r\n"
-			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
-			<< "					#ifdef DEBUG_TRAIN\r\n"
-			<< "					Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
-			<< "					#endif\r\n"
-			<< "					delay(2000);\r\n"
-			<< "				}\r\n"
-			<< "			}\r\n"
-			<< "		}";
-	}
-
-	
-	outputString << "} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "((ulong)routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
-	if (Options.bUseHalloweenMP3Controls) {
-		outputString << "	digitalWrite(MP3SkipPin, LOW);\r\n";
-	}
-
-	outputString << "}\r\n";
-	outputString << extraLine;
-
-	// ESP32 Web Interface Module
-	if (useESP32Board) {
-		outputString << GenerateESP32WebInterfaceModuleCode();
-	}
+	outputString << GenerateLoopCode(useESP32Board);
 
 	return outputString.str();
 }
