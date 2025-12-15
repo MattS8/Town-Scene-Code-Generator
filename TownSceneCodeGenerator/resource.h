@@ -12,6 +12,7 @@
 #define IDD_ADDROUTINE                  104
 #define IDM_EXIT                        105
 #define IDD_VIEWCODE                    105
+#define IDD_EDITROUTINE                 106
 #define IDI_TOWNSCENECODEGENERATOR      107
 #define IDI_SMALL                       108
 #define IDC_TOWNSCENECODEGENERATOR      109

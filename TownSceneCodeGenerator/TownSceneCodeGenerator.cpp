@@ -39,7 +39,6 @@
 #define SAVE_EDIT_ROUTINE (EDIT_ROUTINE_END + 5)
 #define SAVE_EDIT_ROUTINE_END (SAVE_EDIT_ROUTINE + MAX_NUM_ROUTINES)
 
-
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
@@ -58,6 +57,13 @@ int width = 1300;
 int height = 1300;
 int RequiredFieldHeight = 150;
 bool bFirstDraw = true;
+const int NUM_ROUTINE_BUTTONS = 4;
+
+HFONT g_HeaderFont = NULL;
+HFONT g_ButtonFont = NULL;
+HFONT g_OptionsHeaderFont = NULL;
+HFONT g_LabelFont = NULL;
+HFONT g_InputFont = NULL;
 
 HWND gHWND;
 HWND hMP3DriveLetter;
@@ -138,6 +144,7 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	AddRoutine(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK	GenerateCodeCB(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK	EditRoutineCB(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK 	ScrollWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 void				ParseRoutineInput(std::string input, std::string name, std::string fileName);
@@ -253,7 +260,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    if (GetWindowRect(hWnd, &rect))
    {
 	   width = rect.right - rect.left;
-	   RoutineWidth = width / 2 - (RoutineBtnWidth*3) - 10;
+	   RoutineWidth = width / 2 - (RoutineBtnWidth*NUM_ROUTINE_BUTTONS) - 10;
    }
 
    ShowWindow(hWnd, nCmdShow);
@@ -522,22 +529,95 @@ void SaveNewRoutineName(int wmId)
 
 //---------------------------------------------------------------------------
 
+std::string helper_FormatName(const std::string& input) {
+	std::string out;
+	out.reserve(input.size() * 3);
+
+	bool capitalizeNext = true;
+
+	for (size_t i = 0; i < input.size(); ++i) {
+		char c = input[i];
+
+		// Underscore → space
+		if (c == '_') {
+			out.push_back(' ');
+			capitalizeNext = true;
+			continue;
+		}
+
+		// CamelCase → add space before capital letters
+		if (i > 0 && std::isupper(static_cast<unsigned char>(c))) {
+			out.push_back(' ');
+			capitalizeNext = true;
+		}
+
+		// Multi-digit number block
+		if (std::isdigit(static_cast<unsigned char>(c))) {
+			out.push_back(' ');
+
+			// capture entire number run
+			size_t start = i;
+			while (i < input.size() && std::isdigit(static_cast<unsigned char>(input[i]))) {
+				out.push_back(input[i]);
+				i++;
+			}
+
+			out.append(" - ");
+			capitalizeNext = true;
+
+			i--; // offset the for-loop's increment
+			continue;
+		}
+
+		// Normal letters
+		if (capitalizeNext && std::isalpha(static_cast<unsigned char>(c))) {
+			out.push_back(std::toupper(static_cast<unsigned char>(c)));
+		}
+		else {
+			out.push_back(c);
+		}
+
+		capitalizeNext = false;
+	}
+
+	return out;
+}
+
+std::string helper_GetRoutineLabel(const Routine& routine)
+{
+	if (!routine.label.empty())
+		return routine.label;
+	
+	return helper_FormatName(routine.name);
+}
+
 // Allows the user to edit the name of a routine (based on the wmID)
 void EditRoutine(int wmId)
 {
 	// Get position of routine to be editable
+	int routinePosition = wmId - EDIT_ROUTINE;
 
 	// Find routine name at position i
+	std::list<std::string>::iterator it = OrderTracker.routineNames.begin();
+	for (int i = 0; i < routinePosition; i++)
+		it++;
+	std::string routineName = *it;
 
 	// Find routineGUI with corresponding name
+	auto routineGUI = Routines.find(routineName);
+	if (routineGUI == Routines.end()) {
+		OutputLogStr.append("> Error: Routine not found.\r\n");
+		return;
+	}
 
-	// Remove static text window
-
-	// Create edit text window instead
-
-	// Set edit text window text to current name of routine
-
-	// Change image of edit button to 'done' checkmark
+	// Allocate string on heap to pass to dialog (will be freed in dialog callback)
+	std::string* pRoutineName = new std::string(routineName);
+	
+	// Show edit dialog
+	DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_EDITROUTINE), gHWND, EditRoutineCB, reinterpret_cast<LPARAM>(pRoutineName));
+	
+	// Clean up allocated string
+	delete pRoutineName;
 }
 
 //---------------------------------------------------------------------------
@@ -1032,6 +1112,90 @@ INT_PTR CALLBACK AddRoutine(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 
 //---------------------------------------------------------------------------
 
+// Message handler for Edit Routine dialog box.
+INT_PTR CALLBACK EditRoutineCB(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == WM_INITDIALOG)
+	{
+		// lParam contains pointer to the routine name
+		std::string* pRoutineName = reinterpret_cast<std::string*>(lParam);
+		
+		// Store the routine name pointer in window user data for later use
+		SetWindowLongPtr(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pRoutineName));
+		
+		// Find routineGUI with corresponding name
+		auto routineGUI = Routines.find(*pRoutineName);
+		if (routineGUI != Routines.end())
+		{
+			// Get current label
+			std::string currentLabel = helper_GetRoutineLabel(routineGUI->second.routine);
+			
+			// Set the edit control with current label
+			HWND hEdit = GetDlgItem(hDlg, IDC_EDIT1);
+			std::wstring labelWide = UTF8ToUTF16(currentLabel);
+			SetWindowTextW(hEdit, labelWide.c_str());
+			
+			// Set font
+			HFONT hFont = CreateFontW(
+				0, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+				CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+				L"Segoe UI"
+			);
+			if (hFont != NULL)
+			{
+				SendMessageW(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+			}
+		}
+		
+		return (INT_PTR)TRUE;
+	}
+	
+	switch (message)
+	{
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		else if (LOWORD(wParam) == IDOK)
+		{
+			// Get the routine name from window user data
+			std::string* pRoutineName = reinterpret_cast<std::string*>(GetWindowLongPtr(hDlg, GWLP_USERDATA));
+			if (pRoutineName != nullptr)
+			{
+				// Find routineGUI with corresponding name
+				auto routineGUI = Routines.find(*pRoutineName);
+				if (routineGUI != Routines.end())
+				{
+					// Get new label from edit control
+					HWND hEdit = GetDlgItem(hDlg, IDC_EDIT1);
+					std::string newLabel = GetStringFromWindow(hEdit);
+					
+					// Trim whitespace
+					newLabel = trim(newLabel);
+					
+					// Set the label (empty string means use formatted name)
+					routineGUI->second.routine.label = newLabel;
+					
+					// Update the GUI
+					DrawRoutineList();
+					SetWindowTextW(hOutputLog, std::wstring(OutputLogStr.begin(), OutputLogStr.end()).c_str());
+				}
+			}
+			
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	
+	return (INT_PTR)FALSE;
+}
+
+//---------------------------------------------------------------------------
+
 // Determines if user has entered enough data to generate the Arduino code
 bool RequiredFieldsFilled()
 {
@@ -1075,11 +1239,6 @@ bool RequiredFieldsFilled()
 
 //---------------------------------------------------------------------------
 
-HFONT g_HeaderFont = NULL;
-HFONT g_ButtonFont = NULL;
-HFONT g_OptionsHeaderFont = NULL;
-HFONT g_LabelFont = NULL;
-HFONT g_InputFont = NULL;
 
 // Sets up the GUI for all the options and controls of this application
 void AddControls(HWND handler)
@@ -1114,7 +1273,7 @@ void AddControls(HWND handler)
 	{
 		width = rect.right - rect.left;
 		height = rect.bottom - rect.top;
-		RoutineWidth = width / 2 - (RoutineBtnWidth * 3) - (MARGIN_XLARGE * 2);
+		RoutineWidth = width / 2 - (RoutineBtnWidth * NUM_ROUTINE_BUTTONS) - (MARGIN_XLARGE * 2);
 	}
 
 	hwdHandler = handler;
@@ -1146,7 +1305,7 @@ void AddControls(HWND handler)
 
 
 	int cbHeight = LABEL_HEIGHT;
-	int secondColumnStart = RoutineWidth + (RoutineBtnWidth*3) + (MARGIN_XLARGE * 3);
+	int secondColumnStart = RoutineWidth + (RoutineBtnWidth*NUM_ROUTINE_BUTTONS) + (MARGIN_XLARGE * 3);
 	int reqFielsLen = 105;
 	int pinEditWidth = INPUT_WIDTH_PIN;
 	int thirdColumnStart = secondColumnStart + reqFielsLen + pinEditWidth + (MARGIN_MEDIUM * 3);
@@ -1168,7 +1327,7 @@ void AddControls(HWND handler)
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN,
 		MARGIN_SMALL,
 		HeaderRowHeights[0] + HEADER_HEIGHT + BUTTON_HEIGHT_STANDARD + (MARGIN_MEDIUM * 2),
-		RoutineWidth + (RoutineBtnWidth * 3) + (MARGIN_MEDIUM * 3),
+		RoutineWidth + (RoutineBtnWidth * NUM_ROUTINE_BUTTONS) + (MARGIN_MEDIUM * 3),
 		height - 175,
 		handler,
 		NULL,
@@ -1413,15 +1572,21 @@ void DrawRoutineList()
 		// Get routine corresponding to this current position in the list
 		routineGUI = &(Routines.find(*itter)->second);
 
-		// Create string containing the routine name and how many lights are in this routine
+		// Create string containing the routine name, number of lights, and label
 		std::ostringstream osRoutineStr;
-		osRoutineStr << ++i << ") " << routineGUI->routine.name << " (" << routineGUI->routine.lights.size() << " lights)\r\n";
+		osRoutineStr << ++i << ") ";
+		if (!routineGUI->routine.label.empty()) {
+			osRoutineStr << "\"" << routineGUI->routine.label << "\" ";
+		} else {
+			osRoutineStr << routineGUI->routine.name << " ";
+		}
+		osRoutineStr << "(" << routineGUI->routine.lights.size() << " lights)\r\n";
 		std::string tempStr = osRoutineStr.str();
 		std::wstring wStr = std::wstring(tempStr.begin(), tempStr.end());
 
 		// Create windows for the routine name, and buttons to change the routine's position in the list
-		int rowHeight = (wStr.length() > 50 ? RoutineHeight * 2 : RoutineHeight);
-		int buttonYPos = (wStr.length() > 50 ? currentYPos-(RoutineHeight) : currentYPos);
+		int rowHeight = RoutineHeight;
+		int buttonYPos = currentYPos;
 		routineGUI->title = CreateWindowW(L"Static", wStr.c_str(), WS_VISIBLE | WS_CHILD, 
 			UIConstants::MARGIN_SMALL, 
 			currentYPos, 
@@ -1429,6 +1594,13 @@ void DrawRoutineList()
 			rowHeight,
 			hRoutineScrollContainer, NULL, NULL, NULL);
 		SendMessage(routineGUI->title, WM_SETFONT, (WPARAM)g_LabelFont, TRUE);
+		routineGUI->editButton = CreateWindowW(L"Button", L"Edit Label", WS_VISIBLE | WS_CHILD, 
+			RoutineWidth + UIConstants::MARGIN_MEDIUM + (RoutineBtnWidth * buttonPos++), 
+			buttonYPos,
+			RoutineBtnWidth, 
+			RoutineBtnHeight, 
+			hRoutineScrollContainer, (HMENU)(EDIT_ROUTINE + i - 1), NULL, NULL);
+		SendMessage(routineGUI->editButton, WM_SETFONT, (WPARAM)g_ButtonFont, TRUE);
 		routineGUI->upButton = CreateWindowW(L"Button", L"Move Up", WS_VISIBLE | WS_CHILD, 
 			RoutineWidth + UIConstants::MARGIN_MEDIUM + (RoutineBtnWidth * buttonPos++), 
 			buttonYPos,
@@ -1570,6 +1742,11 @@ void ParseRoutineInput(std::string input, std::string routineName, std::string f
 
 	// Set .wav file path
 	routineGUI.routine.wavFilePath = fileName;
+	size_t pos1 = fileName.find_last_of("\\");
+	size_t pos2 = fileName.rfind(".wav");
+	if (pos1 == std::string::npos) pos1 = -1;
+	if (pos2 == std::string::npos) pos2 = fileName.length();
+	routineGUI.routine.label = fileName.substr(pos1 + 1, pos2 - (pos1 + 1));
 
 	// Format strings
 	std::string comma = ", ";

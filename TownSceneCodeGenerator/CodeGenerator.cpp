@@ -1,6 +1,76 @@
 
 #include "stdafx.h"
 #include "CodeGenerator.h"
+#include <cctype>
+
+// /////////////////
+// Helper Functions
+// /////////////////
+#include <string>
+#include <cctype>
+
+std::string FormatName(const std::string& input) {
+	std::string out;
+	out.reserve(input.size() * 3);
+
+	bool capitalizeNext = true;
+
+	for (size_t i = 0; i < input.size(); ++i) {
+		char c = input[i];
+
+		// Underscore → space
+		if (c == '_') {
+			out.push_back(' ');
+			capitalizeNext = true;
+			continue;
+		}
+
+		// CamelCase → add space before capital letters
+		if (i > 0 && std::isupper(static_cast<unsigned char>(c))) {
+			out.push_back(' ');
+			capitalizeNext = true;
+		}
+
+		// Multi-digit number block
+		if (std::isdigit(static_cast<unsigned char>(c))) {
+			out.push_back(' ');
+
+			// capture entire number run
+			size_t start = i;
+			while (i < input.size() && std::isdigit(static_cast<unsigned char>(input[i]))) {
+				out.push_back(input[i]);
+				i++;
+			}
+
+			out.append(" - ");
+			capitalizeNext = true;
+
+			i--; // offset the for-loop's increment
+			continue;
+		}
+
+		// Normal letters
+		if (capitalizeNext && std::isalpha(static_cast<unsigned char>(c))) {
+			out.push_back(std::toupper(static_cast<unsigned char>(c)));
+		}
+		else {
+			out.push_back(c);
+		}
+
+		capitalizeNext = false;
+	}
+
+	return out;
+}
+
+
+std::string CodeGenerator::GetRoutineLabel(const Routine& routine) const
+{
+	if (!routine.label.empty())
+		return routine.label;
+	
+	return FormatName(routine.name);
+}
 
 // -------- GENERATE DEFINES -------- //
 void CodeGenerator::GenerateDefines()
@@ -134,7 +204,13 @@ void CodeGenerator::GeneratePinSetup()
 	}
 
 	// NEW CODE GENERATED
-	OutputString << "ulong StartTime = 0, DeltaTime = 0;\r\nint CurrentRoutine = 0;\r\n\r\n";
+	OutputString << "ulong StartTime = 0, DeltaTime = 0;\r\nint CurrentRoutine = 0;\r\n";
+
+	// ESP32 WEB SKIP VARIABLES
+	if (UseESP32) {
+		OutputString << "int ForcedNextRoutine = -1;\r\n";
+	}
+	OutputString << "\r\n";
 }
 
 // -------- GENERATE DATA STRUCTURES -------- //
@@ -191,11 +267,14 @@ void CodeGenerator::GenerateLightAndRoutineVariables()
 		if (Options.bPrettyPrint)
 			OutputString << "\r\n";
 
-		RoutineArray << "&" << itRoutines->second.routine.name << comma;
+		//RoutineArray << "&" << itRoutines->second.routine.name << comma;
 	}
 
-	std::string routinesString = OrderTracker.getRoutinesString(Options.bUseHalloweenMP3Controls);
-	OutputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesString << "};\r\n\r\n"; //CHECK  THIS
+	for (std::list<std::string>::iterator itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end(); ++itter) {
+		RoutineArray << "&" << *itter << comma;
+	}
+	std::string routinesStr = RoutineArray.str();
+	OutputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesStr.substr(0, routinesStr.size()-2) << "};\r\n\r\n"; //CHECK  THIS
 }
 
 // -------- GENERATE CHECK LIGHT FUNCTION -------- //
@@ -258,83 +337,133 @@ void CodeGenerator::GenerateCheckLightFunction()
 // -------- GENERATE SKIP TO ROUTINE FUNCTION -------- //
 void CodeGenerator::GenerateSkipToRoutineFunction()
 {
-	if (!Options.bUseHalloweenMP3Controls) {
+	if (Options.bUseHalloweenMP3Controls)
+		return;
+
+	if (Options.bPrettyPrint) {
+		OutputString
+			<< "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n"
+			<< " * 	track to the desired track.\r\n"
+			<< " *   Returns: array position of next routine\r\n"
+			<< " **/\r\n";
+	}
+	OutputString 
+		<< "int SkipToRoutine()\r\n"
+		<< "{"
+		<< "	int i;\r\n"
+		<< "	int nextRoutine = CurrentRoutine;\r\n";
+
+	std::string tabs = "	";
+	if (UseESP32) {
 		if (Options.bPrettyPrint) {
 			OutputString
-				<< "/** Applies the proper number of Skip commands to the MP3 player in order to go from the current\r\n"
-				<< " * 	track to the desired track.\r\n"
-				<< " *   Returns: array position of next routine\r\n"
-				<< " **/\r\n";
+				<< "	// ============================================================\r\n"
+				<< "	// 1) If a specific routine was requested, honor that first\r\n"
+				<< "	// ============================================================\r\n";
 		}
-
-
-		OutputString 
-			<< "int SkipToRoutine()\r\n"
-			<< "{";
-
-		// v2.0 - new non-repeating randomization implementation
-		OutputString 
-			<< "    if (all_used_up) {\r\n"
-			<< "        #ifdef DEBUG_SKIP_ROUTINE\r\n"
-			<< "        Serial.print(\"all_used_up :\");\r\n"
-			<< "        Serial.println(all_used_up);\r\n"
-			<< "        #endif\r\n"
-			<< "        for (int ii = 0; ii < NUM_ROUTINES; ii++) {\r\n"
-			<< "            used_routine[ii] = false;\r\n"
-			<< "        }\r\n"
-			<< "        all_used_up = false;\r\n"
-			<< "    }\r\n"
-			<< "    int nextRoutine = bRandomizeRoutineOrder\r\n"
-			<< "        ? CurrentRoutine\r\n"
-			<< "        : CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n"
-			<< "    int numberOfSkips = 1;\r\n"
+		OutputString
+			<< "	int numberOfSkips = 1;\r\n"
+			<< "	if (ForcedNextRoutine != -1) {\r\n"
+			<< "		nextRoutine = ForcedNextRoutine;\r\n"
+			<< "		ForcedNextRoutine = -1;" << (Options.bPrettyPrint ? "	// Consume the override\r\n" : "\r\n")
 			<< "\r\n"
-			<< "    if (bRandomizeRoutineOrder && NUM_ROUTINES > 1) {\r\n"
-			<< "        while (nextRoutine == CurrentRoutine || used_routine[nextRoutine])\r\n"
-			<< "            nextRoutine = random(0, NUM_ROUTINES);\r\n"
-			<< "        used_routine[nextRoutine] = true;\r\n"
-			<< "        numberOfSkips = nextRoutine < CurrentRoutine\r\n"
-			<< "            ? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n"
-			<< "            : nextRoutine - CurrentRoutine;\r\n"
-			<< "\r\n"
-			<< "        all_used_up = true;\r\n"
-			<< "        for (int i = 0; i < NUM_ROUTINES; i++) {\r\n"
-			<< "            if (!used_routine[i]) {\r\n"
-			<< "                all_used_up = false;\r\n"
-			<< "                break;\r\n"
-			<< "            }\r\n"
-			<< "        }\r\n"
-			<< "\r\n"
-			<< "        #ifdef DEBUG_SKIP_ROUTINE\r\n"
-			<< "        Serial.print(\"Current routine :\");\r\n"
-			<< "        Serial.println(CurrentRoutine);\r\n"
-			<< "        Serial.print(\"Routine \");\r\n"
-			<< "        Serial.print(nextRoutine);\r\n"
-			<< "        Serial.print(\" selected(skipping \");\r\n"
-			<< "        Serial.print(numberOfSkips);\r\n"
-			<< "        Serial.println(\" times)\");\r\n"
-			<< "        #endif\r\n"
-			<< "    }\r\n"
-			<< "    for (int i = 0; i < numberOfSkips; i++) {\r\n"
-			<< "		#ifdef DEBUG_SKIP_ROUTINE\r\n"
-			<< "		Serial.print(\" skipping...\");\r\n"
-			<< "		#endif\r\n"
-			<< "        digitalWrite(MP3SkipPin, HIGH);\r\n"
-			<< "        delay(150);\r\n"
-			<< "        digitalWrite(MP3SkipPin, LOW);\r\n"
-			<< "        delay(250);\r\n"
-			<< "    }\r\n"
-			<< "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
-			<< "	Serial.println(\"Done skipping!\");\r\n"
-			<< "	#endif\r\n";
-		if (UseESP32) {
-			OutputString << "	CurrentRoutine = nextRoutine;" << (Options.bPrettyPrint ? "	// added to update current routine for web server" : "") << "\r\n";
-		}
-		OutputString << "    return nextRoutine;\r\n"
-			<< "}";
-
-		OutputString << "\r\n";
+			<< (Options.bPrettyPrint ? "	// Compute how many MP3 skips we need to get from CurrentRoutine\r\n" : "")
+			<< (Options.bPrettyPrint ? "	// to nextRoutine, wrapping around NUM_ROUTINES.\r\n" : "")
+			<< "		if (nextRoutine == CurrentRoutine) {\r\n"
+			<< "			numberOfSkips = 0;" << (Options.bPrettyPrint ? "	// same routine: no MP3 skip\r\n" : "\r\n")
+			<< "		} else if (nextRoutine > CurrentRoutine) {\r\n"
+			<< "			numberOfSkips = nextRoutine - CurrentRoutine;\r\n"
+			<< "		} else {\r\n"
+			<< "			numberOfSkips = NUM_ROUTINES - CurrentRoutine + nextRoutine;\r\n"
+			<< "		}\r\n";
+			if (Options.bPrettyPrint) {
+				OutputString
+					<< "\r\n"
+					<< "		// NOTE: we do NOT touch used_routine[] here,\r\n"
+					<< "		// so your non-repeating random order is not disturbed by a manual jump.\r\n";
+			}
+			OutputString
+				<< "	}\r\n"
+				<< "	else {\r\n";
+			if (Options.bPrettyPrint) {
+				OutputString
+					<< "		// ============================================================\r\n"
+					<< "		// 2) Normal automatic behavior (original logic)\r\n"
+					<< "		// ============================================================\r\n"; 
+			}
+			tabs = "		";
 	}
+
+	// v2.0 - new non-repeating randomization implementation
+	if (Options.bPrettyPrint) {
+		OutputString
+			<< tabs << "// Determine if all routines have been used FIRST\r\n";
+	}
+	OutputString 
+		<< tabs << "bool allRoutinesUsed = true;\r\n"
+		<< tabs << "for (i = 0; i < NUM_ROUTINES; i++) {\r\n"
+		<< tabs << "    if (!used_routine[i]) {\r\n"
+		<< tabs << "        allRoutinesUsed = false;\r\n"
+		<< tabs << "        break;\r\n"
+		<< tabs << "    }\r\n"
+		<< tabs << "}\r\n"
+		<< "\r\n"
+		<< tabs << "if (allRoutinesUsed) {\r\n"
+		<< tabs << "    for (i = 0; i < NUM_ROUTINES; i++) {\r\n"
+		<< tabs << "        used_routine[i] = false;\r\n"
+		<< tabs << "    }\r\n"
+		<< tabs << "}\r\n"
+		<< tabs << "nextRoutine = bRandomizeRoutineOrder\r\n"
+		<< tabs << "    ? CurrentRoutine\r\n"
+		<< tabs << "    : CurrentRoutine + 1 == NUM_ROUTINES ? 0 : CurrentRoutine + 1;\r\n"
+		<< tabs << "int numberOfSkips = 1;\r\n"
+		<< "\r\n"
+		<< "if (bRandomizeRoutineOrder && NUM_ROUTINES > 1) {\r\n"
+		<< "    while (nextRoutine == CurrentRoutine || used_routine[nextRoutine])\r\n"
+		<< "        nextRoutine = random(0, NUM_ROUTINES);\r\n"
+		<< "    used_routine[nextRoutine] = true;\r\n"
+		<< "    numberOfSkips = nextRoutine < CurrentRoutine\r\n"
+		<< "        ? NUM_ROUTINES - CurrentRoutine + nextRoutine\r\n"
+		<< "        : nextRoutine - CurrentRoutine;\r\n"
+		<< "\r\n"
+		<< tabs << "    #ifdef DEBUG_SKIP_ROUTINE\r\n"
+		<< tabs << "    Serial.print(\"Current routine :\");\r\n"
+		<< tabs << "    Serial.println(CurrentRoutine);\r\n"
+		<< tabs << "    Serial.print(\"Routine \");\r\n"
+		<< tabs << "    Serial.print(nextRoutine);\r\n"
+		<< tabs << "    Serial.print(\" selected(skipping \");\r\n"
+		<< tabs << "    Serial.print(numberOfSkips);\r\n"
+		<< tabs << "    Serial.println(\" times)\");\r\n"
+		<< tabs << "    #endif\r\n"
+		<< tabs << "}\r\n";
+	if (UseESP32) {
+		OutputString
+			<< "	}\r\n";
+		if (Options.bPrettyPrint) {
+			OutputString
+				<< "	// ============================================================\r\n"
+				<< "	// 3) Perform MP3 skip pulses (for both auto and forced jumps)\r\n"
+				<< "	// ============================================================\r\n";
+		}
+	}
+	OutputString
+		<< "	for (int i = 0; i < numberOfSkips; i++) {\r\n"
+		<< "		#ifdef DEBUG_SKIP_ROUTINE\r\n"
+		<< "		Serial.print(\" skipping...\");\r\n"
+		<< "		#endif\r\n"
+		<< "	    digitalWrite(MP3SkipPin, HIGH);\r\n"
+		<< "	    delay(150);\r\n"
+		<< "	    digitalWrite(MP3SkipPin, LOW);\r\n"
+		<< "	    delay(250);\r\n"
+		<< "	}\r\n"
+		<< "	#ifdef DEBUG_SKIP_ROUTINE\r\n"
+		<< "	Serial.println(\"Done skipping!\");\r\n"
+		<< "	#endif\r\n";
+	OutputString 
+		<< "    return nextRoutine;\r\n"
+		<< "}";
+
+	OutputString << "\r\n";
 }
 
 // -------- GENERATE LIGHT FUNCTIONS -------- //
@@ -360,6 +489,15 @@ void CodeGenerator::GenerateLightFunctions()
 // -------- GENERATE SETUP FUNCTION -------- //
 void CodeGenerator::GenerateSetupFunction()
 {
+	if (UseESP32) {
+		// Forward web function declarations
+		OutputString
+			<< "void StartWebServer();\r\n"
+			<< "void HandleWebRequests();\r\n"
+			<< "String buildPage();\r\n"
+			<< "String GetRoutineDescription(int routine);\r\n";
+	}
+
 	OutputString
 		<< "void setup()\r\n"
 		<< "{\r\n"
@@ -644,13 +782,53 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 	if (Options.bPrettyPrint) {
 		OutputString 
 			<< "\r\n"
+			<< "// ===========================================\r\n"
+			<< "// Routine Descriptions For Dropdown\r\n"
+			<< "// ===========================================\r\n";
+	}
+	OutputString
+		<< "const char* RoutineDescriptions[] = {\r\n";
+	for (std::list<std::string>::iterator itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end();) {
+		OutputString << "    \"" << GetRoutineLabel(Routines.find(*itter)->second.routine);
+		if (++itter == OrderTracker.routineNames.end())
+			OutputString << "\"\r\n";
+		else
+			OutputString << "\",\r\n";
+	}
+	OutputString
+		<< "};\r\n";
+	if (Options.bPrettyPrint) {
+		OutputString
 			<< "// -------------------------------------------------------------\r\n"
 			<< "//    Build Web Page (simple status + skip button)\r\n"
 			<< "// -------------------------------------------------------------\r\n";
 	}
 	OutputString
-		<< "String buildPage() {\r\n"
-		<< "	String ip = WiFi.localIP().toString();\r\n"
+		<< "String buildPage()\r\n"
+		<< "{\r\n"
+		<< "	String ip = WiFi.localIP().toString();\r\n";
+	if (Options.bPrettyPrint) {
+		OutputString
+			<< "	// ================================================\r\n"
+			<< "	// Build dynamic dropdown options\r\n"
+			<< "	// ================================================\r\n";
+	}
+	OutputString
+		<< "	String routineOptions = \"\";\r\n"
+    	<< "	for (int i = 0; i < NUM_ROUTINES; i++) {\r\n"
+    	<< "		routineOptions += \"<option value='\" + String(i) + \"'\";\r\n"
+    	<< "		if (i == CurrentRoutine) routineOptions += \" selected\";\r\n"
+    	<< "		routineOptions += \">\";\r\n"
+    	<< "		routineOptions += String(i) + \" - \" + GetRoutineDescription(i);\r\n"
+    	<< "		routineOptions += \"</option>\";\r\n"
+    	<< "	}\r\n";
+	if (Options.bPrettyPrint) {
+		OutputString
+		<< "	// ================================================\r\n"
+    	<< "	// Begin HTML\r\n"
+    	<< "	// ================================================\r\n";
+	}
+	OutputString
 		<< "	String html = R\"(\r\n";
 	// Start html content
 	OutputString
@@ -682,28 +860,33 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "    }\r\n"
 		<< "\r\n"
 		<< "    .container {\r\n"
-		<< "        padding: 20px;\r\n"
+		<< "        padding: 18px;\r\n"
 		<< "        max-width: 480px;\r\n"
 		<< "        margin: auto;\r\n"
 		<< "    }\r\n"
 		<< "\r\n"
-		<< "    h1 {\r\n"
-		<< "        font-size: 1.7rem;\r\n"
-		<< "        margin-bottom: 10px;\r\n"
-		<< "    }\r\n"
-		<< "\r\n"
+		<< "    /* Sticky header when scrolling */\r\n"
 		<< "    .status-card {\r\n"
 		<< "        background: var(--card);\r\n"
 		<< "        border-radius: 14px;\r\n"
 		<< "        padding: 20px;\r\n"
 		<< "        box-shadow: 0 0 10px #000a;\r\n"
-		<< "        margin-bottom: 80px;\r\n"
+		<< "        margin-bottom: 90px;\r\n"
+		<< "        position: sticky;\r\n"
+		<< "        top: 0;\r\n"
+		<< "        z-index: 10;\r\n"
 		<< "    }\r\n"
 		<< "\r\n"
 		<< "    .routine-number {\r\n"
-		<< "        font-size: 3rem;\r\n"
+		<< "        font-size: 3.2rem;\r\n"
 		<< "        font-weight: bold;\r\n"
 		<< "        margin: 10px 0;\r\n"
+		<< "        text-shadow: 0 0 8px rgba(46,160,67,0.5);\r\n"
+		<< "        transition: opacity 0.3s ease;\r\n"
+		<< "    }\r\n"
+		<< "\r\n"
+		<< "    #desc {\r\n"
+		<< "        transition: opacity 0.3s ease;\r\n"
 		<< "    }\r\n"
 		<< "\r\n"
 		<< "    .ip {\r\n"
@@ -711,44 +894,80 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "        opacity: 0.7;\r\n"
 		<< "    }\r\n"
 		<< "\r\n"
-		<< "    /* Skip Button (fixed bottom) */\r\n"
+		<< "    /* Floating bottom bar */\r\n"
 		<< "    .skip-bar {\r\n"
 		<< "        position: fixed;\r\n"
 		<< "        bottom: 0;\r\n"
 		<< "        left: 0;\r\n"
 		<< "        right: 0;\r\n"
 		<< "        padding: 18px;\r\n"
+		<< "        padding-bottom: env(safe-area-inset-bottom);\r\n"
 		<< "        background: var(--card);\r\n"
 		<< "        box-shadow: 0 -2px 10px #000a;\r\n"
 		<< "    }\r\n"
 		<< "\r\n"
 		<< "    button {\r\n"
-		<< "        width: 90%;\r\n"
-		<< "        max-width: 350px;\r\n"
-		<< "        font-size: 1.4rem;\r\n"
+		<< "        width: 92%;\r\n"
+		<< "        max-width: 360px;\r\n"
+		<< "        font-size: 1.35rem;\r\n"
 		<< "        padding: 16px;\r\n"
-		<< "        border-radius: 12px;\r\n"
+		<< "        border-radius: 14px;\r\n"
 		<< "        border: none;\r\n"
 		<< "        background: var(--accent);\r\n"
 		<< "        color: var(--btn-text);\r\n"
 		<< "        font-weight: bold;\r\n"
-		<< "        transition: 0.15s;\r\n"
+		<< "        margin-top: 6px;\r\n"
+		<< "        transition: transform 0.1s, background 0.15s;\r\n"
 		<< "    }\r\n"
 		<< "\r\n"
 		<< "    button:active {\r\n"
+		<< "        transform: scale(0.97);\r\n"
 		<< "        background: var(--accent2);\r\n"
-		<< "        transform: scale(0.98);\r\n"
+		<< "    }\r\n"
+		<< "\r\n"
+		<< "    /* Mobile-optimized dropdown */\r\n"
+		<< "    select {\r\n"
+		<< "        width: 92%;\r\n"
+		<< "        padding: 16px;\r\n"
+		<< "        border-radius: 12px;\r\n"
+		<< "        border: none;\r\n"
+		<< "        font-size: 1.15rem;\r\n"
+		<< "        margin-bottom: 14px;\r\n"
+		<< "        background: #0f1722;\r\n"
+		<< "        color: white;\r\n"
+		<< "        appearance: none;\r\n"
+		<< "        background-image: url(\"data:image/svg+xml;utf8,<svg fill='white' height='20' width='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'><polygon points='0,0 20,0 10,12'/></svg>\");\r\n"
+		<< "        background-position: right 14px center;\r\n"
+		<< "        background-repeat: no-repeat;\r\n"
 		<< "    }\r\n"
 		<< "</style>\r\n"
 		<< "\r\n"
 		<< "<script>\r\n"
-		<< "    // Auto-refresh just the routine number every 2 seconds (no page reload)\r\n"
+		<< "    // Smooth update every 2 seconds\r\n"
 		<< "    setInterval(() => {\r\n"
+		<< "\r\n"
 		<< "        fetch('/routine')\r\n"
 		<< "            .then(r => r.text())\r\n"
 		<< "            .then(num => {\r\n"
-		<< "                document.getElementById('routine').innerText = num;\r\n"
+		<< "                let el = document.getElementById('routine');\r\n"
+		<< "                el.style.opacity = 0;\r\n"
+		<< "                setTimeout(() => {\r\n"
+		<< "                    el.innerText = num;\r\n"
+		<< "                    el.style.opacity = 1;\r\n"
+		<< "                }, 150);\r\n"
 		<< "            });\r\n"
+		<< "\r\n"
+		<< "        fetch('/description')\r\n"
+		<< "            .then(r => r.text())\r\n"
+		<< "            .then(desc => {\r\n"
+		<< "                let de = document.getElementById('desc');\r\n"
+		<< "                de.style.opacity = 0;\r\n"
+		<< "                setTimeout(() => {\r\n"
+		<< "                    de.innerText = desc;\r\n"
+		<< "                    de.style.opacity = 1;\r\n"
+		<< "                }, 150);\r\n"
+		<< "            });\r\n"
+		<< "\r\n"
 		<< "    }, 2000);\r\n"
 		<< "</script>\r\n"
 		<< "\r\n"
@@ -760,24 +979,47 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "\r\n"
 		<< "    <div class='status-card'>\r\n"
 		<< "        <div>Current Routine:</div>\r\n"
-		<< "        <div id='routine' class='routine-number'>)\";\r\n\r\n"
-		<< "	html += String(CurrentRoutine);\r\n"
-		<< "	html += R\"(</div>\r\n"
-		<< "		<div class='ip'>Device IP: )\";\r\n\r\n"
-		<< "	html += ip;\r\n\r\n"
-		<< "	html += R\"(</div>\r\n"
-		<< "	</div>\r\n"
-		<< "</div>\r\n\r\n"
+		<< "\r\n"
+		<< "        <div id='routine' class='routine-number'>)\";\r\n"
+		<< "\r\n"
+		<< "    html += String(CurrentRoutine);\r\n"
+		<< "\r\n"
+		<< "    html += R\"(</div>\r\n"
+		<< "\r\n"
+		<< "        <div id='desc' style=\"margin-top:10px; font-size:1.2rem; opacity:1;\">)\";\r\n"
+		<< "\r\n"
+		<< "    html += GetRoutineDescription(CurrentRoutine);\r\n"
+		<< "\r\n"
+		<< "    html += R\"(</div>\r\n"
+		<< "\r\n"
+		<< "        <div class='ip'>Device IP: )\";\r\n"
+		<< "    html += ip;\r\n"
+		<< "    html += R\"(</div>\r\n"
+		<< "    </div>\r\n"
+		<< "</div>\r\n"
+		<< "\r\n"
 		<< "<div class='skip-bar'>\r\n"
+		<< "\r\n"
 		<< "    <form action='/skip' method='POST'>\r\n"
 		<< "        <button type='submit'>Skip to Next Routine &#10148;</button>\r\n"
 		<< "    </form>\r\n"
+		<< "\r\n"
+		<< "    <form action='/skipto' method='POST'>\r\n"
+		<< "        <select name=\"routine\">)\";\r\n"
+		<< "\r\n"
+		<< "    html += routineOptions;\r\n"
+		<< "\r\n"
+		<< "    html += R\"(</select>\r\n"
+		<< "        <button type='submit'>Skip to Routine</button>\r\n"
+		<< "    </form>\r\n"
+		<< "\r\n"
 		<< "</div>\r\n"
 		<< "\r\n"
 		<< "</body>\r\n"
 		<< "</html>\r\n"
 		<< ")\";\r\n"
-		<< "	return html;\r\n"
+		<< "\r\n"
+		<< "    return html;\r\n"
 		<< "}\r\n";
 
 	// End html content
@@ -808,6 +1050,13 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "	RequestWebSkip();   // set flag (non-blocking)\r\n"
 		<< "	server.sendHeader(\"Location\", \"/\");\r\n"
 		<< "	server.send(303);    // redirect back to main page\r\n"
+		<< "}\r\n"
+		<< "\r\n"
+		<< "String GetRoutineDescription(int routine) {\r\n"
+		<< "	int count = sizeof(RoutineDescriptions) / sizeof(RoutineDescriptions[0]);\r\n"
+		<< "	return routine < 0 || routine >= count\r\n"
+		<< "		? \"Unknown Routine\"\r\n"
+		<< "		: RoutineDescriptions[routine];\r\n"
 		<< "}\r\n";
 
 	if (Options.bPrettyPrint) {
@@ -840,6 +1089,29 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "	// Routes\r\n"
 		<< "	server.on(\"/\", handleRoot);\r\n"
 		<< "	server.on(\"/skip\", HTTP_POST, handleSkip);\r\n"
+    	<< "	server.on(\"/routine\", HTTP_GET, []() {\r\n"
+    	<< "	    server.send(200, \"text/plain\", String(CurrentRoutine));\r\n"
+    	<< "	});\r\n"
+		<< "\r\n"
+		<< "	server.on(\"/description\", HTTP_GET, []() {\r\n"
+		<< "		server.send(200, \"text/plain\", GetRoutineDescription(CurrentRoutine));\r\n"
+		<< "	});\r\n"
+		<< "\r\n"
+		<< "server.on(\"/skipto\", HTTP_POST, []() {\r\n"
+		<< "    if (server.hasArg(\"routine\")) {\r\n"
+		<< "        int r = server.arg(\"routine\").toInt();\r\n"
+		<< "        // clamp to valid range\r\n"
+		<< "        if (r < 0) r = 0;\r\n"
+		<< "        if (r >= NUM_ROUTINES) r = NUM_ROUTINES - 1;\r\n"
+		<< "        ForcedNextRoutine = r;      // set override\r\n"
+		<< "        WebSkipRequested  = true;   // exit current routine\r\n"
+		<< "        // *** FIX: Redirect back to main page ***\r\n"
+		<< "        server.sendHeader(\"Location\", \"/\");\r\n"
+		<< "        server.send(303);\r\n"
+		<< "    } else {\r\n"
+		<< "        server.send(400, \"text/plain\", \"Missing routine number\");\r\n"
+		<< "    }\r\n"
+		<< "});\r\n"
 		<< "\r\n"
 		<< "	server.begin();\r\n"
 		<< "	Serial.println(\"Web Server started.\");\r\n"
