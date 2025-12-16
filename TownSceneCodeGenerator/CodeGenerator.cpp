@@ -267,14 +267,16 @@ void CodeGenerator::GenerateLightAndRoutineVariables()
 		if (Options.bPrettyPrint)
 			OutputString << "\r\n";
 
-		//RoutineArray << "&" << itRoutines->second.routine.name << comma;
+		RoutineArray << "&" << itRoutines->second.routine.name << comma;
 	}
 
-	for (std::list<std::string>::iterator itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end(); ++itter) {
-		RoutineArray << "&" << *itter << comma;
-	}
-	std::string routinesStr = RoutineArray.str();
-	OutputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesStr.substr(0, routinesStr.size()-2) << "};\r\n\r\n"; //CHECK  THIS
+	//for (std::list<std::string>::iterator itter = OrderTracker.routineNames.begin(); itter != OrderTracker.routineNames.end(); ++itter) {
+	//	RoutineArray << "&" << *itter << comma;
+	//}
+	//std::string routinesStr = RoutineArray.str();
+	std::string routinesString = OrderTracker.getRoutinesString(Options.bUseHalloweenMP3Controls); // Puts the last routine at the front because MP3 skips on first startup
+	//OutputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesStr.substr(0, routinesStr.size()-2) << "};\r\n\r\n"; //CHECK  THIS
+	OutputString << "Routine* " << "routines[NUM_ROUTINES] = {" << routinesString << "};\r\n\r\n";
 }
 
 // -------- GENERATE CHECK LIGHT FUNCTION -------- //
@@ -349,7 +351,7 @@ void CodeGenerator::GenerateSkipToRoutineFunction()
 	}
 	OutputString 
 		<< "int SkipToRoutine()\r\n"
-		<< "{"
+		<< "{\r\n"
 		<< "	int i;\r\n"
 		<< "	int nextRoutine = CurrentRoutine;\r\n";
 
@@ -568,7 +570,8 @@ void CodeGenerator::GenerateSetupFunction()
 			<< "    uint8_t motorAvg = 0;\r\n"
 			<< "    uint8_t motorAvg1 = 0;\r\n";
 		if (Options.bRandomizeRoutineOrder) {
-			OutputString << "    for (int ii = 0; ii < NUM_ROUTINES; ii++) {  // resets used routine array to all false\r\n"
+			OutputString 
+				<< "    for (int ii = 0; ii < NUM_ROUTINES; ii++) {  // resets used routine array to all false\r\n"
 				<< "        used_routine[ii] = false;\r\n"
 				<< "    }\r\n"
 				<< "    all_used_up = false;        // reset all routine used variable\r\n";
