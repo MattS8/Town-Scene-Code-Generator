@@ -87,7 +87,7 @@ void CodeGenerator::GenerateDefines()
 		OutputString << "#define D2 23" << "\r\n"
 			<< "#define D3 32" << "\r\n"
 			<< "#define D4 33" << "\r\n"
-			<< "#define D5 25" << "\r\n"
+			<< "#define D5 " << (UseESP32 ? "21" : "25") << "\r\n"
 			<< "#define D6 26" << "\r\n"
 			<< "#define D7 27" << "\r\n"
 			<< "#define D8 14" << "\r\n"
@@ -120,7 +120,11 @@ void CodeGenerator::GenerateDefines()
 	if (!Options.mp3VolumePin.empty())
 		OutputString << "#define MP3VolumePin " << Options.mp3VolumePin << "\r\n";
 	if (!Options.trainPinLeft.empty())
-		OutputString << "#define TrainPin " << Options.trainPinLeft << "\r\n";
+		OutputString << "int TrainPinL2R = " << Options.trainPinLeft << ";\r\n";
+	if (!Options.trainPinRight.empty())
+		OutputString << "int TrainPinR2L = " << Options.trainPinRight << ";\r\n";
+	if (!Options.motorVoltagePin.empty())
+		OutputString << "int TrainMotorVoltagePin = " << Options.motorVoltagePin << ";\r\n";
 	if (Options.bDebugLights)
 		OutputString << "#define DEBUG\r\n";
 	if (Options.bDebugTrain)
@@ -196,11 +200,11 @@ void CodeGenerator::GeneratePinSetup()
 	// Motor current variables
 	if (!Options.trainPinLeft.empty()) {
 		OutputString
-			<< "uint8_t motor_current_limit = " << (Options.bUseChristmasTrainSetup ? "80" : "35") << ";\r\n"
-			<< "uint8_t motor_current_limit_L2R = " << (Options.bUseChristmasTrainSetup ? "80" : "24") << ";\r\n"
-			<< "uint8_t motor_current_limit_R2L = " << (Options.bUseChristmasTrainSetup ? "80" : "24") << ";\r\n"
-			<< "int avgdly = 500;" << (Options.bPrettyPrint ? " // micro seconds delay between motor current readings for averaging" : "") << "\r\n"
-			<< "int avg_count = 200;" << (Options.bPrettyPrint ? " // number of readings to average for motor current" : "") << "\r\n";
+			<< "uint8_t motor_current_limit = " << (Options.bUseChristmasTrainSetup ? "90" : "35") << ";\r\n"
+			<< "uint8_t motor_current_limit_L2R = " << (Options.bUseChristmasTrainSetup ? "110" : "24") << ";\r\n"
+			<< "uint8_t motor_current_limit_R2L = " << (Options.bUseChristmasTrainSetup ? "110" : "24") << ";\r\n"
+			<< "int avgdly = 300;" << (Options.bPrettyPrint ? " // micro seconds delay between motor current readings for averaging" : "") << "\r\n"
+			<< "int avg_count = 30;" << (Options.bPrettyPrint ? " // number of readings to average for motor current" : "") << "\r\n";
 	}
 
 	// NEW CODE GENERATED
@@ -228,6 +232,7 @@ void CodeGenerator::GenerateDataStructures()
 		<< "	OnTime* Times;\r\n"
 		<< "	int NumberOfOnTimes;\r\n"
 		<< "	int State;\r\n"
+//		<< "	int StartingState;\r\n"
 		<< "} Light;\r\n"
 		<< (Options.bPrettyPrint ? "\r\n" : "")
 		<< "typedef struct Routine\r\n"
@@ -254,7 +259,9 @@ void CodeGenerator::GenerateLightAndRoutineVariables()
 		{
 			OutputString << "OnTime " << itRoutines->second.routine.name << "_" << itLights->second.name << "_OnTimes[" << itLights->second.numberOfTimes << "] = {" << (Options.bUseLowPrecisionTimes ? itLights->second.onTimesLowPrecision : itLights->second.onTimes) << ";\r\n";
 			OutputString << "Light " << itRoutines->second.routine.name << "_" << itLights->second.name << " = {" << itLights->second.pin << comma << itRoutines->second.routine.name;
-			OutputString << "_" << itLights->second.name << "_OnTimes" << comma << itLights->second.numberOfTimes << comma << "OFF};\r\n";
+			OutputString << "_" << itLights->second.name << "_OnTimes" << comma << itLights->second.numberOfTimes << comma << "OFF" 
+//				<< comma << "OFF"
+				<< "}; \r\n";
 			if (Options.bPrettyPrint)
 				OutputString << "\r\n";
 
@@ -312,8 +319,9 @@ void CodeGenerator::GenerateCheckLightFunction()
 		<< "            #ifdef DEBUG\r\n"
 		<< "            if (light->State == OFF) \r\n"
 		<< "            {\r\n"
-		<< "                Serial.print(\"Turning on light : \");\r\n"
-		<< "                Serial.println(light->Pin);\r\n"
+		<< "                Serial.print(\"(CHECK_LIGHT)  Turning light \");\r\n"
+		<< "                Serial.print(light->Pin);\r\n"
+		<< "				Serial.println(\"ON\");\r\n"
 		<< "            }\r\n"
 		<< "            light->State = ON;\r\n"
 		<< "            #endif\r\n"
@@ -321,6 +329,11 @@ void CodeGenerator::GenerateCheckLightFunction()
 		<< "            return true;\r\n"
 		<< "        }\r\n"
 		<< "    }\r\n"
+		<< "	#ifdef DEBUG\r\n"
+		<< "	Serial.print(\"(CHECK_LIGHT) Light \");\r\n"
+		<< "	Serial.print(light->Pin);\r\n"
+		<< "	Serial.println(\" was turned OFF\");\r\n"
+		<< "	#endif\r\n"
 		<< "    digitalWrite(light->Pin, OFF);\r\n"
 		<< "\r\n"
 		<< "    #ifdef DEBUG\r\n"
@@ -329,9 +342,61 @@ void CodeGenerator::GenerateCheckLightFunction()
 		<< "        Serial.print(\"Turning off light : \");\r\n"
 		<< "        Serial.println(light->Pin);\r\n"
 		<< "    }\r\n"
-		<< "    light->State = OFF;\r\n"
 		<< "    #endif\r\n"
+		<< "    light->State = OFF;\r\n"
 		<< "    return false;\r\n"
+		<< "}\r\n"
+		<< "\r\n";
+}
+
+// -------- GENERATE IS_TRAIN FUNCTION -------- //
+void CodeGenerator::GenerateIsTrainFunction()
+{
+	if (Options.bPrettyPrint) {
+		OutputString
+			<< "/** Helper function to determine if a 'light' is actually a train pin.\r\n"\
+			<< " *   - light: The light structure to check\r\n"
+			<< " *   Returns: Whether or not given light is a train pin.\r\n"
+			<< " **/\r\n";
+	}
+	OutputString
+		<< "bool IsLightTrainPin(Light* light)\r\n"
+		<< "{\r\n"
+		<< "	#ifdef DEBUG_TRAIN\r\n"
+		<< "	Serial.print(\"Checking if Pin \");\r\n"
+		<< "	Serial.print(light->Pin);\r\n"
+		<< "	Serial.println(\" is a train pin...\");\r\n"
+		<< "	#endif\r\n";
+	if (!Options.trainPinLeft.empty()) {
+		OutputString
+			<< "	if (light->Pin == TrainPinL2R) {\r\n"
+			<< "		#ifdef DEBUG_TRAIN\r\n"
+			<< "		Serial.println(\"TRUE!\");\r\n"
+			<< "		#endif\r\n"
+			<< "		return true;\r\n"
+			<< "	}\r\n";
+	}
+	if (!Options.trainPinRight.empty()) {
+		OutputString
+			<< "	if (light->Pin == TrainPinR2L) {\r\n"
+			<< "		#ifdef DEBUG_TRAIN\r\n"
+			<< "		Serial.println(\"TRUE!\");\r\n"
+			<< "		#endif\r\n"
+			<< "		return true;\r\n"
+			<< "	}\r\n";
+	}
+	if (!Options.motorVoltagePin.empty()) {
+		OutputString
+			<< "	if (light->Pin == TrainMotorVoltagePin) {\r\n"
+			<< "		#ifdef DEBUG_TRAIN\r\n"
+			<< "		Serial.println(\"TRUE!\");\r\n"
+			<< "		#endif\r\n"
+			<< "		return true;\r\n"
+			<< "	}\r\n";
+	}
+	OutputString
+		<< "\r\n"
+		<< "	return false;\r\n"
 		<< "}\r\n"
 		<< "\r\n";
 }
@@ -464,12 +529,65 @@ void CodeGenerator::GenerateSkipToRoutineFunction()
 void CodeGenerator::GenerateLightFunctions()
 {
 	// Turn All Lights
-	OutputString << "/** Turns all lights on or off.\r\n *	- state: ON or OFF\r\n **/\r\nvoid TurnAllLights(int state)\r\n{\r\n	for (int i=0; i < NUM_LIGHTS; i++)	\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.print(\"Turning light \");\r\n		Serial.print(AllLights[i]);\r\n		Serial.println(state == ON ? \" ON\" : \" OFF\");\r\n		#endif\r\n		digitalWrite(AllLights[i], state);	\r\n	}\r\n}\r\n";
-	OutputString << "\r\n";
+	OutputString
+		<< "/** Turns all lights on or off.\r\n"
+		<< " *	- state: ON or OFF\r\n"
+		<< " **/\r\n"
+		<< "void TurnAllLights(int state)\r\n"
+		<< "{\r\n"
+		<< "	#ifdef DEBUG\r\n"
+		<< "	Serial.print(\"-------- TurnAllLights\");\r\n"
+		<< "	Serial.print(state == ON ? \" ON\" : \" OFF\");\r\n"
+		<< "	Serial.println(\" --------\");\r\n"
+		<< "	#endif\r\n"
+		<< "	for (int i=0; i < NUM_LIGHTS; i++)\r\n"
+		<< "	{\r\n"
+		<< "		#ifdef DEBUG\r\n"
+		<< "		Serial.print(\"Turning light \");\r\n"
+		<< "		Serial.print(AllLights[i]);\r\n"
+		<< "		Serial.println(state == ON ? \" ON\" : \" OFF\");\r\n"
+		<< "		#endif\r\n"
+		<< "		digitalWrite(AllLights[i], state);\r\n"
+		<< "	}\r\n"
+		<< "	#ifdef DEBUG\r\n"
+		<< "	Serial.println(\"-------------------------------------\");\r\n"
+		<< "	#endif\r\n"
+		<< "}\r\n"
+		<< "\r\n";
 
 	// All Lights On 
-	OutputString << "/** Checks to see if all lights should be turned on or not.\r\n *	- allOnLight: Light pointer containing all OnTimes for All Lights On\r\n **/\r\nbool AllLightsOn(Light* allOnLight)\r\n{\r\n	for (int i = 0; i < allOnLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)allOnLight->Times[i].Start * 100)" : "allOnLight->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)allOnLight->Times[i].End * 100)" : "allOnLight->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			if (allOnLight->State == OFF) \r\n			{\r\n				Serial.println(\"Turning all lights ON.\");\r\n			}\r\n			allOnLight->State = ON;\r\n			#endif\r\n			TurnAllLights(ON);\r\n			return true;\r\n		}\r\n	}\r\n	if (bAllLightsOn)\r\n	{\r\n		#ifdef DEBUG\r\n		Serial.println(\"Turning all lights OFF.\");\r\n		allOnLight->State = OFF;	\r\n		#endif\r\n		TurnAllLights(OFF);\r\n	}\r\n	return false;\r\n}\r\n";
-	OutputString << "\r\n";
+	OutputString
+		<< "/** Checks to see if all lights should be turned on or not.\r\n"
+		<< " *	- allOnLight: Light pointer containing all OnTimes for All Lights On\r\n"
+		<< " **/\r\n"
+		<< "bool AllLightsOn(Light* allOnLight)\r\n"
+		<< "{\r\n"
+		<< "	for (int i = 0; i < allOnLight->NumberOfOnTimes; i++)\r\n"
+		<< "	{\r\n"
+		<< "		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)allOnLight->Times[i].Start * 100)" : "allOnLight->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)allOnLight->Times[i].End * 100)" : "allOnLight->Times[i].End") << ")\r\n"
+		<< "		{\r\n"
+		<< "			#ifdef DEBUG\r\n"
+		<< "			if (allOnLight->State == OFF)\r\n"
+		<< "			{\r\n"
+		<< "				Serial.println(\"Turning all lights ON.\");\r\n"
+		<< "			}\r\n"
+		<< "			allOnLight->State = ON;\r\n"
+		<< "			#endif\r\n"
+		<< "			TurnAllLights(ON);\r\n"
+		<< "			return true;\r\n"
+		<< "		}\r\n"
+		<< "	}\r\n"
+		<< "	if (bAllLightsOn)\r\n"
+		<< "	{\r\n"
+		<< "		#ifdef DEBUG\r\n"
+		<< "		Serial.println(\"Turning all lights OFF.\");\r\n"
+		<< "		#endif\r\n"
+
+		<< "		TurnAllLights(OFF);\r\n"
+		<< "	}\r\n"
+		<< "	return false;\r\n"
+		<< "}\r\n"
+		<< "\r\n";
 
 	// All Lights Off
 	OutputString << "/** Checks to see if all lights should be turned off or not. This function only sends ALL OFF command once per instance.\r\n *	- allOffLight: Light pointer containing all OnTimes for All Lights Off\r\n **/\r\nbool AllLightsOff(Light* allOffLight)\r\n{\r\n	for (int i = 0; i < allOffLight->NumberOfOnTimes; i++)\r\n	{\r\n		if (DeltaTime >= " << (Options.bUseLowPrecisionTimes ? "((ulong)allOffLight->Times[i].Start * 100)" : "allOffLight->Times[i].Start") << " && DeltaTime < " << (Options.bUseLowPrecisionTimes ? "((ulong)allOffLight->Times[i].End * 100)" : "allOffLight->Times[i].End") << ")\r\n		{\r\n			#ifdef DEBUG\r\n			Serial.println(\"Turning all lights OFF.\");\r\n			#endif\r\n			TurnAllLights(OFF);\r\n			allOffLight->Times[i].End = 0;\r\n			return true;\r\n		}\r\n	}\r\n	return false;\r\n}\r\n";
@@ -549,9 +667,9 @@ void CodeGenerator::GenerateSetupFunction()
 			<< "    #ifdef DEBUG_TRAIN\r\n"
 			<< "        Serial.println(\"Resetting train to designated side...\");\r\n"
 			<< "    #endif\r\n"
-			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);      // Make sure train direction is L to R\r\n"
+			<< "    digitalWrite(TrainPinR2L, OFF);      // Make sure train direction is L to R\r\n"
 			<< "    delay(250);\r\n"
-			<< "    digitalWrite(TrainPin, ON); // S/B A5\r\n"
+			<< "    digitalWrite(TrainPinL2R, ON); // S/B A5\r\n"
 			<< "    delay(10);\r\n"
 			<< "    int startTime = millis();  // Record the start time\r\n"
 			<< "    int maxDuration = " << maxTrainInit << ";\r\n"
@@ -575,7 +693,7 @@ void CodeGenerator::GenerateSetupFunction()
 			<< "        time1 = millis();\r\n"
 			<< "		long sum = 0;\r\n"
 			<< "		for (int i = 0; i < avg_count; i++) {\r\n"
-			<< "			sum += analogRead(" << Options.motorVoltagePin << ");\r\n"
+			<< "			sum += analogRead(TrainMotorVoltagePin);\r\n"
 			<< "			delayMicroseconds(avgdly);\r\n"
 			<< "		}\r\n"
 			<< "		motorAvg = sum / avg_count;\r\n"
@@ -597,10 +715,10 @@ void CodeGenerator::GenerateSetupFunction()
 			<< "        #endif\r\n"
 			<< "    }\r\n"
 			<< "\r\n"
-			<< "    digitalWrite(TrainPin, OFF);\r\n"
-			<< "    digitalWrite(" << Options.trainPinRight << ", ON);" << (Options.bPrettyPrint ? "	// Back train off the stop a bit\r\n" : "\r\n")
+			<< "    digitalWrite(TrainPinL2R, OFF);\r\n"
+			<< "	digitalWrite(TrainPinR2L, ON);" << (Options.bPrettyPrint ? "	// Back train off the stop a bit\r\n" : "\r\n")
 			<< "    delay(250);\r\n"
-			<< "    digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "    digitalWrite(TrainPinR2L, OFF);\r\n"
 			<< "    while (millis() - startTime < maxDuration) {" << (Options.bPrettyPrint ? "	// Use this remaining train initialization time for all lights on at startup\r\n" : "\r\n")
 			<< "        delay(100);\r\n"
 			<< "    }\r\n"
@@ -690,14 +808,16 @@ void CodeGenerator::GenerateLoopFunction()
 		<< "			AllLightsOff(allOffLight);\r\n"
 		<< "		if (allOnLight != NULL)\r\n"
 		<< "			bAllLightsOn = AllLightsOn(allOnLight);\r\n"
-		<< "		for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n"
-		<< "			CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n\r\n";
+		<< "			for (int i=0; i < routines[CurrentRoutine]->NumberOfLights; i++)\r\n"
+		<< "				if (!bAllLightsOn || IsLightTrainPin(routines[CurrentRoutine]->Lights[i]))\r\n"
+		<< "					CheckLight(routines[CurrentRoutine]->Lights[i]);\r\n"
+		<< "\r\n";
 
 	// Train train motor state
 	if (!Options.trainPinLeft.empty()) {
 		OutputString
-			<< "		int pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
-			<< "		int pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
+			<< "		int pinStateL2R = digitalRead(TrainPinL2R);\r\n"
+			<< "		int pinStateR2L = digitalRead(TrainPinR2L);\r\n"
 			<< "		if (pinStateR2L == HIGH || pinStateL2R == HIGH) {\r\n"
 			<< "			if (pinStateL2R == HIGH)\r\n"
 			<< "				motor_current_limit = motor_current_limit_L2R;\r\n"
@@ -709,7 +829,7 @@ void CodeGenerator::GenerateLoopFunction()
 			<< "\r\n"
 			<< "			long sum = 0;\r\n"
 			<< "			for (int i = 0; i < avg_count; i++) {\r\n"
-			<< "				sum += analogRead(" << Options.motorVoltagePin << ");\r\n"
+			<< "				sum += analogRead(TrainMotorVoltagePin);\r\n"
 			<< "				delayMicroseconds(avgdly);\r\n"
 			<< "			}\r\n"
 			<< "			motorAvg = sum / avg_count;\r\n"
@@ -719,23 +839,23 @@ void CodeGenerator::GenerateLoopFunction()
 			<< "			#endif\r\n"
 			<< "\r\n"
 			<< "			if (motorAvg >= motor_current_limit) {\r\n"
-			<< "				pinStateL2R = digitalRead(" << Options.trainPinLeft << ");\r\n"
-			<< "				pinStateR2L = digitalRead(" << Options.trainPinRight << ");\r\n"
+			<< "				pinStateL2R = digitalRead(TrainPinL2R);\r\n"
+			<< "				pinStateR2L = digitalRead(TrainPinR2L);\r\n"
 			<< "				if (pinStateL2R == HIGH) {\r\n"
-			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
-			<< "					digitalWrite(" << Options.trainPinLeft << ", ON);\r\n"
+			<< "					digitalWrite(TrainPinR2L, OFF);\r\n"
+			<< "					digitalWrite(TrainPinL2R, ON);\r\n"
 			<< "					delay(250);\r\n"
-			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n"
+			<< "					digitalWrite(TrainPinL2R, OFF);\r\n"
 			<< "					#ifdef DEBUG_TRAIN\r\n"
 			<< "						Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
 			<< "					#endif\r\n"
 			<< "					delay(2000);\r\n"
 			<< "				}\r\n"
 			<< "				if (pinStateR2L == HIGH) {\r\n"
-			<< "					digitalWrite(" << Options.trainPinLeft << ", OFF);\r\n"
-			<< "					digitalWrite(" << Options.trainPinRight << ", ON);\r\n"
+			<< "					digitalWrite(TrainPinL2R, OFF);\r\n"
+			<< "					digitalWrite(TrainPinR2L, ON);\r\n"
 			<< "					delay(250);\r\n"
-			<< "					digitalWrite(" << Options.trainPinRight << ", OFF);\r\n"
+			<< "					digitalWrite(TrainPinR2L, OFF);\r\n"
 			<< "					#ifdef DEBUG_TRAIN\r\n"
 			<< "						Serial.println(\"Motor stopped by current monitor. Code delay of 4 seconds has begun \");\r\n"
 			<< "					#endif\r\n"
@@ -747,6 +867,7 @@ void CodeGenerator::GenerateLoopFunction()
 
 	OutputString
 		<< "	} while (DeltaTime <= " << (Options.bUseLowPrecisionTimes ? "((ulong)routines[CurrentRoutine]->RoutineTime * 100)" : "routines[CurrentRoutine]->RoutineTime") << ");\r\n"
+		<< "	TurnAllLights(OFF);\r\n"
 		<< "	for (int x=0; allOffLight != NULL && x < allOffLight->NumberOfOnTimes; x++)\r\n"
 		<< "		allOffLight->Times[x].End = " << "routines[CurrentRoutine]->RoutineTime" << ";\r\n";
 	if (Options.bUseHalloweenMP3Controls) {
@@ -1096,7 +1217,6 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "}\r\n"
 		<< "\r\n"
 		<< "void handleSkip() {\r\n"
-		<< "    TurnAllLights(OFF);     // <--- CALL YOUR ACTUAL FUNCTION HERE\r\n"
 		<< "    RequestWebSkip();       // set flag (non-blocking)\r\n"
 		<< "    server.sendHeader(\"Location\", \"/\");\r\n"
 		<< "    server.send(303);\r\n"
@@ -1114,7 +1234,7 @@ void CodeGenerator::GenerateESP32WebModuleCode()
 		<< "        if (r == NUM_ROUTINES)\r\n"
 		<< "            r = 0;\r\n"
 		<< "        ForcedNextRoutine = r;      // set override\r\n"
-		<< "        WebSkipRequested  = true;   // exit current routine\r\n"
+		<< "        RequestWebSkip();   // exit current routine\r\n"
 		<< "        server.sendHeader(\"Location\", \"/\");\r\n"
 		<< "        server.send(303);\r\n"
 		<< "    } else {\r\n"
@@ -1232,6 +1352,7 @@ std::string CodeGenerator::GenerateCode()
 	GenerateCheckLightFunction();
 	GenerateSkipToRoutineFunction();
 	GenerateLightFunctions();
+	GenerateIsTrainFunction();
 	if (Options.bPrettyPrint)
 	{
 		OutputString << "/* ----------------------------------------------------------------------------------------------------\r\n";

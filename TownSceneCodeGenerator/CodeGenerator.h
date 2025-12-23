@@ -174,6 +174,9 @@ private:
 	// Generate ESP32 Web Module code
 	void GenerateESP32WebModuleCode();
 
+	// Generate IsTrain helper function code
+	void GenerateIsTrainFunction();
+
 	// Helper to get routine label from either a custom label or routine name
 	std::string GetRoutineLabel(const Routine& routine) const;
 };
