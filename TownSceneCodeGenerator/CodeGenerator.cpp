@@ -84,28 +84,29 @@ void CodeGenerator::GenerateDefines()
 	if (UseESP32) {
 		if (Options.bPrettyPrint)
 			OutputString << "// ----- Digital pins remapped to ESP32 GPIOs -----" << "\r\n";
-		OutputString << "#define D2 23" << "\r\n"
-			<< "#define D3 32" << "\r\n"
-			<< "#define D4 33" << "\r\n"
-			<< "#define D5 " << (UseESP32 ? "21" : "25") << "\r\n"
-			<< "#define D6 26" << "\r\n"
-			<< "#define D7 27" << "\r\n"
-			<< "#define D8 14" << "\r\n"
-			<< "#define D9 12" << "\r\n"
-			<< "#define D10 13" << "\r\n"
-			<< "#define D11 22" << "\r\n"
-			<< "#define D12 15" << "\r\n"
-			<< "#define D13 19" << "\r\n";
+		OutputString 
+			<< "#define D2 23" << (Options.bAddChristmasSceneComments ? " // TreeLights" : "") << "\r\n"
+			<< "#define D3 32" << (Options.bAddChristmasSceneComments ? " // TreeStar" : "") << "\r\n"
+			<< "#define D4 33" << (Options.bAddChristmasSceneComments ? " // Cottage" : "") << "\r\n"
+			<< "#define D5 21" << (Options.bAddChristmasSceneComments ? " // DeptStore" : "") << "\r\n"
+			<< "#define D6 26" << (Options.bAddChristmasSceneComments ? " // CandyShop" : "") << "\r\n"
+			<< "#define D7 27" << (Options.bAddChristmasSceneComments ? " // ChurchTowers" : "") << "\r\n"
+			<< "#define D8 14" << (Options.bAddChristmasSceneComments ? " // Livery" : "") << "\r\n"
+			<< "#define D10 13" << (Options.bAddChristmasSceneComments ? " // BedAndBreakfast" : "") << "\r\n"
+			<< "#define D11 22" << (Options.bAddChristmasSceneComments ? " // ToyShop" : "") << "\r\n"
+			<< "#define D12 15" << (Options.bAddChristmasSceneComments ? " // ChurchChoir" : "") << "\r\n"
+			<< "#define D13 19" << (Options.bAddChristmasSceneComments ? " // ClockShop" : "") << "\r\n";
 		if (Options.bPrettyPrint)
 			OutputString << "\r\n// ----- Nano analog pin numbers remapped as general I/O -----" << "\r\n";
-		OutputString << "#define A0 2" << "\r\n"
-			<< "#define A1 4" << "\r\n"
-			<< "#define A2 16" << "\r\n"
-			<< "#define A3 17" << "\r\n"
-			<< "#define A4 5" << "\r\n"
-			<< "#define A5 18" << "\r\n"
-			<< "#define A6 39" << (Options.bPrettyPrint ? "   // ADC1_CH0 (real analog)" : "") << "\r\n"
-			<< "#define A7 36" << (Options.bPrettyPrint ? "   // ADC1_CH3 (random seed floating input)" : "") << "\r\n";
+		OutputString 
+			<< "#define A0 12" << (Options.bAddChristmasSceneComments ? " // Gazebo" : "") << "\r\n"
+			<< "#define A1 4" << (Options.bAddChristmasSceneComments ? " // LampPosts" : "") << "\r\n"
+			<< "#define A2 16" << (Options.bAddChristmasSceneComments ? " // Volume Up" : "") << "\r\n"
+			<< "#define A3 17" << (Options.bAddChristmasSceneComments ? " // Next" : "") << "\r\n"
+			<< "#define A4 5" << (Options.bAddChristmasSceneComments ? " // TrainR2L" : "") << "\r\n"
+			<< "#define A5 18" << (Options.bAddChristmasSceneComments ? " // TrainL2R" : "") << "\r\n"
+			<< "#define A6 39" << (Options.bAddChristmasSceneComments ? " // " : (Options.bPrettyPrint ? "   // ADC1_CH0 (real analog)" : "")) << "\r\n"
+			<< "#define A7 36" << (Options.bAddChristmasSceneComments ? " // " : (Options.bPrettyPrint ? "   // ADC1_CH3 (random seed floating input)" : "")) << "\r\n";
 	}
 	else {
 		OutputString << "#define D2 2\r\n" << "#define D3 3\r\n" << "#define D4 4\r\n" << "#define D5 5\r\n" << "#define D6 6\r\n" << "#define D7 7\r\n" << "#define D8 8\r\n";
@@ -200,9 +201,9 @@ void CodeGenerator::GeneratePinSetup()
 	// Motor current variables
 	if (!Options.trainPinLeft.empty()) {
 		OutputString
-			<< "uint8_t motor_current_limit = " << (Options.bUseChristmasTrainSetup ? "110" : "35") << ";\r\n"
-			<< "uint8_t motor_current_limit_L2R = " << (Options.bUseChristmasTrainSetup ? "110" : "24") << ";\r\n"
-			<< "uint8_t motor_current_limit_R2L = " << (Options.bUseChristmasTrainSetup ? "110" : "24") << ";\r\n"
+			<< "uint8_t motor_current_limit = 110;\r\n"
+			<< "uint8_t motor_current_limit_L2R = 110;\r\n"
+			<< "uint8_t motor_current_limit_R2L = 110;\r\n"
 			<< "int avgdly = 300;" << (Options.bPrettyPrint ? " // micro seconds delay between motor current readings for averaging" : "") << "\r\n"
 			<< "int avg_count = 30;" << (Options.bPrettyPrint ? " // number of readings to average for motor current" : "") << "\r\n";
 	}
@@ -552,6 +553,7 @@ void CodeGenerator::GenerateLightFunctions()
 		<< "	#ifdef DEBUG\r\n"
 		<< "	Serial.println(\"-------------------------------------\");\r\n"
 		<< "	#endif\r\n"
+		<< (UseESP32 ? "delay(250);     // fixes random all on failures and spurious light on failures\r\n" : "")
 		<< "}\r\n"
 		<< "\r\n";
 
@@ -823,7 +825,6 @@ void CodeGenerator::GenerateLoopFunction()
 			<< "				motor_current_limit = motor_current_limit_L2R;\r\n"
 			<< "			if (pinStateR2L == HIGH)\r\n"
 			<< "				motor_current_limit = motor_current_limit_R2L;\r\n"
-			<< "			delay(100);\r\n"
 			<< "			uint8_t motorAvg = 0;\r\n"
 			<< "			uint8_t motorAvg1 = 0;\r\n"
 			<< "\r\n"

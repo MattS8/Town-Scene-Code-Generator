@@ -22,7 +22,7 @@ public:
 	bool bUseLowPrecisionTimes = false;							// Should use unsigned ints instead of unsigned longs for time stores
 	bool bUseLegacyA6 = false;									// Preserves unknown feature of previous versions where A6 was hardcoded to be unused INPUT
 	bool bUseLegacyA7 = false;									// Preserves unknown feature of previous versions where A7 was hardcoded to be unused INPUT_PULLUP
-	bool bUseChristmasTrainSetup = true;						// Uses motor values specifically for the Christmas town scene setup (added in v2.2)
+	bool bAddChristmasSceneComments = true;						// Uses motor values specifically for the Christmas town scene setup (added in v2.2)
 
 	std::string motionSensorPin = "";							// Pin used if the Arduino board has a motion detector; Generates the needed code if this is not empty
 	std::string mp3SkipPin = "";								// Pin used to skip to the next song on the MP3 player

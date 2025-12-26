@@ -712,8 +712,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             switch (wmId)
             {
 			case ID_GENERATEDCODE_USECHRISTMASTRAINSETUP:
-				Options.bUseChristmasTrainSetup = !Options.bUseChristmasTrainSetup;
-				CheckMenuItem(GetMenu(hWnd), ID_GENERATEDCODE_USECHRISTMASTRAINSETUP, Options.bUseChristmasTrainSetup ? MF_CHECKED : MF_UNCHECKED);
+				Options.bAddChristmasSceneComments = !Options.bAddChristmasSceneComments;
+				CheckMenuItem(GetMenu(hWnd), ID_GENERATEDCODE_USECHRISTMASTRAINSETUP, Options.bAddChristmasSceneComments ? MF_CHECKED : MF_UNCHECKED);
 				break;
 			case IDM_GENERATEDCODEOPTIONS_PRETTYPRINT:
 				Options.bPrettyPrint = !Options.bPrettyPrint;
