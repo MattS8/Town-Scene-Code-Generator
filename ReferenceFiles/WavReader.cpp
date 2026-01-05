@@ -78,7 +78,7 @@ int FindChunk(FILE *fp, LPMMCKINFO pChunk, LPMMCKINFO pParentChunk)
 		if (nBytesRead != nBytesToRead) return -1;
 		if ((pChunk->ckid & 0xff) == 0)     // 1. Byte = Padbyte?
 		{
-			fseek(fp, 1 - nBytesToRead, SEEK_CUR);    // File-Pointer zurücksetzen + 1 Byte vor
+			fseek(fp, 1 - nBytesToRead, SEEK_CUR);    // File-Pointer zurï¿½cksetzen + 1 Byte vor
 			nBytesReadSoFar++;
 			if (nBytesReadSoFar + nBytesToRead > nBytesMax) return -1;
 			nBytesRead = fread(pChunk, 1, nBytesToRead, fp);  // nochmal lesen
@@ -199,7 +199,7 @@ int ReadCueListFromRiffFile(std::string strFileName, int nCueArrayOffset, bool b
 	MMCKINFO DataChunkInfo; // Data-Subchunk (Wave-Audio-Daten)
 	MMCKINFO CueChunkInfo; // Cue-Subchunk (Startsample)
 	MMCKINFO ListChunkInfo; // LIST-Chunk
-	MMCKINFO LtxtChunkInfo; // Cue-Länge
+	MMCKINFO LtxtChunkInfo; // Cue-Lï¿½nge
 	MMCKINFO LablChunkInfo; // Cue-Label
 	MMCKINFO NoteChunkInfo; // Cue-Description
 	CUEPOINT CuePoint;
@@ -272,7 +272,7 @@ int ReadCueListFromRiffFile(std::string strFileName, int nCueArrayOffset, bool b
 	// Set the file pointer behind the data.
   //  fseek(fp, DataChunkInfo.cksize, SEEK_CUR);
   //  nFilePointerCueSubchunk = ftell(fp);
-	// Neu: DataChunkInfo.cksize neu berechnen, damit auch WavPack-Dateien gelesen werden können:
+	// Neu: DataChunkInfo.cksize neu berechnen, damit auch WavPack-Dateien gelesen werden kï¿½nnen:
 	int nCurrentFilePos = ftell(fp);
 	fseek(fp, 0, SEEK_END);
 	int nFileSize = ftell(fp);
@@ -282,7 +282,7 @@ int ReadCueListFromRiffFile(std::string strFileName, int nCueArrayOffset, bool b
 	fseek(fp, nCurrentFilePos + DataChunkInfo.cksize, SEEK_SET);
 	nFilePointerCueSubchunk = ftell(fp);
 
-	// Falls die WAV-Datei eine Cue-List enthält, dann diese ins Array lesen:
+	// Falls die WAV-Datei eine Cue-List enthï¿½lt, dann diese ins Array lesen:
 	int nCuesInFile = 0;
 
 	do // "Pseudo"-Schleife, um im Fehlerfalle mit 'break' hinter die Schleife zu springen. ;-)
@@ -299,7 +299,7 @@ int ReadCueListFromRiffFile(std::string strFileName, int nCueArrayOffset, bool b
 		fread((char*)&nCuesInFile, sizeof(DWORD), 1, fp); // Anzahl Cuepoints
 		if (nCuesInFile == 0) break; // Keine Cues gefunden
 
-		// Wenn die Cue-List aus der WAV-Datei gelöscht werden soll, dann nur die Anzahl der Cues zurückgeben.
+		// Wenn die Cue-List aus der WAV-Datei gelï¿½scht werden soll, dann nur die Anzahl der Cues zurï¿½ckgeben.
 		if (bDeleteCueListFromAudioFile) break; //
 
 		if (sizeof(DWORD) + nCuesInFile * sizeof(CUEPOINT) != CueChunkInfo.cksize)
@@ -336,7 +336,7 @@ int ReadCueListFromRiffFile(std::string strFileName, int nCueArrayOffset, bool b
 		if (iCueRead < nCuesInFile)
 		{
 			strMsg = "";
-			strMsg.append("Only ").append(std::to_string(iCueRead)).append(" of ").append(std::to_string(nCuesInFile)).append(" could be reead.");
+			strMsg.append("Only ").append(std::to_string(iCueRead)).append(" of ").append(std::to_string(nCuesInFile)).append(" could be read.");
 			OutputLogStr.append(strMsg).append("\r\n");
 			//MessageBox(Handle, strMsg.c_str(), "Warning", MB_OK | MB_ICONINFORMATION | MB_APPLMODAL);
 			nCuesInFile = iCueRead;

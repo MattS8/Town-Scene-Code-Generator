@@ -1,0 +1,4 @@
+PyQt6>=6.6.0
+mutagen>=1.47.0
+PyInstaller>=6.0.0
+

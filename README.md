@@ -1,51 +1,141 @@
 # Town Scene Code Generator
-This application automatically generates Arduino code for to control lights and music for animated town scene sets on mantle tops / tables. It works by parsing `.wav` files, looking for cue markers with specific formatted tags, and creating "routines" to control turning on and off lights within the various town scene homes based on the cue markers. These routines are used to generate code which will tell the Arduino how and when to cycle through the songs on an MP3 player as well as when to turn light pins on and off.
 
-## Supported Hardware Interfacing
-This program generates code for an **Arduino Nano**. It may work for other Arduino devices, however your mileage may vary. It can also interface with any MP3 player that supports file transfer via the Windows file explorer.
+A Windows desktop application for generating Arduino code to control lights synchronized with music for a town scene display. The application reads WAV files with embedded CUE point markers, allows you to configure light routines, and generates ESP32-compatible Arduino code.
+
+## Features
+
+- **Drag & Drop WAV Files**: Easily add WAV files with CUE point markers
+- **Routine Configuration**: Create and manage light routines with building/light assignments
+- **Arduino Code Generation**: Automatically generate ESP32-compatible Arduino code
+- **MP3 Player File Transfer**: Copy WAV files to MP3 player via drive letter selection
+- **Project Management**: Save and load routine projects
+
+## Requirements
+
+- Windows 10/11
+- Python 3.11+ (for development)
+- PyQt6
+- PyInstaller (for building executable)
+
+## Installation
+
+### From Source
+
+1. Clone or download this repository
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run the application:
+   ```bash
+   python src/main.py
+   ```
+
+### Building Executable
+
+To create a standalone Windows executable:
+
+```bash
+python build_exe.py
+```
+
+The executable will be created in the `dist` folder as `TownSceneGenerator.exe`.
 
 ## Usage
-Drag .wav files with properly formatted tags onto the program. All recognized pins will be automatically selected for you. Then declare the pin used to start/turn on the MP3 player. If the town scene has custom pieces (such as an animated train set), declare the pin(s) and check the associated options. You will also need to declare the pin used for volumen control. 
 
-* **Important:** If your hardware turns lights on by sending a LOW value, be sure to check the `Swap On/Off Values` checkbox.
+### 1. Add WAV Files
 
-### Creating Proper Audio Files
-The program reads cue markers from `.wav` files in order to determine when to turn light pins on and off. This means that you can mixdown multiple songs into one big audio file (called a *routine*). 
+- Drag and drop WAV files into the left panel, or
+- Click "Add Files..." to browse for WAV files
+- The application will automatically parse CUE point markers from the files
 
-#### Adding Cue Markers
-Add cue markers wherever you want to turn a light on and set the duration to whenever you want the light to turn off. For example, if you add cue markers to the beginning of each song and make the cues span the duration of the respective songs, you will effectively get lights that turn on and off with each and every song.
+### 2. Create a Routine
 
-#### Cue Marker Naming Convention
-Cue marker names must follow a strict naming convention in order for the program to properly parse them. 
+1. Click "Routine" → "New Routine" from the menu
+2. Enter a routine name
+3. Select a WAV file from the dropdown
+4. Configure buildings and lights:
+   - Click "Add Building" to add a new building
+   - Enter building name, ID, and GPIO pin numbers (comma-separated)
+5. Click "Save Routine" to save your configuration
 
-Put the name of the house (something unique) followed by a space and then the pin number for that house. For example: `SomeLight A2`. Make sure to use the same name whenever you reference that house multiple times within the same scene.
+### 3. Generate Arduino Code
 
-Names must not be the same as a **Special Tag** (see below) nor contain spaces or special characters (such as `!,".'\][` etc...).
+1. Configure your routines
+2. Go to "File" → "Export Arduino Code..."
+3. Choose a location to save the `.ino` file
+4. Open the generated file in Arduino IDE and upload to your ESP32
 
-##### Special Tags
-The following are special cue marker names that denote certain functions:
-* `ALL_ON` - Turns all light pins on (excluding train pins)
-* `ALL_OFF` - Turns all light pins off (excluding train pins)
+### 4. Transfer Files to MP3 Player
 
-##### Tips
-- Add some additional time to the end of each routine. This will ensure that the entire routine will run to completion. The amount of time to add depends on the inaccuracy of your MP3 timing.
+1. Connect your MP3 player to the computer
+2. In the right panel, select the drive letter where the MP3 player is mounted
+3. Select which files to transfer (checkboxes)
+4. Optionally specify a destination folder
+5. Click "Transfer Files" to copy WAV files to the MP3 player
 
-### Importing Audio Files
+## Project Structure
 
-The preferred method of importing is to simply drag the `.wav` file onto the program. You can also manually add extracted cue info by clicking the `Add Routine` button. However, this will make it impossible to automatically load the song files to the MP3 player.
+```
+Town-Scene-Code-Generator/
+├── src/
+│   ├── main.py              # Application entry point
+│   ├── gui/                 # GUI components
+│   │   ├── main_window.py
+│   │   ├── file_manager.py
+│   │   ├── routine_editor.py
+│   │   └── mp3_transfer.py
+│   ├── core/                # Core functionality
+│   │   ├── wav_parser.py
+│   │   ├── routine_manager.py
+│   │   ├── code_generator.py
+│   │   └── mp3_file_manager.py
+│   └── templates/
+│       └── arduino_template.ino
+├── build_exe.py            # PyInstaller build script
+├── requirements.txt        # Python dependencies
+└── README.md
+```
 
-If you have an MP3 player connected, you can automatically send audio files by clicking either the `Send Code to Arduino` or `Upload Code` button. 
-> **NOTE:** You must save an MP3 version of your audio file with the same name and at the same file location of the corresponding `.wav` file.
+## WAV File Format
 
-### Sending Code Directly to Arduino IDE/Device
-In order to send code directly to the Arduino IDE and/or device, you must have the Arduino IDE installed and set up on your computer. Visit the [Arduino website](https://www.arduino.cc/en/guide/windows) to set that up. Open the IDE and ensure the board type is set to `Arduino Nano` and the COM Port is properly set up.
+The application expects WAV files with embedded CUE point markers in the standard RIFF format:
+- CUE chunk: Contains marker positions (sample offsets)
+- LIST chunk with LABL subchunks: Contains marker labels
+- LIST chunk with NOTE subchunks: Contains marker descriptions (optional)
 
-You mus also set the PATH environment in Windows to recognize Arduino commands from the command line. Find the folder location that contains `arduino.exe` and add that path to your system PATH environment (For help on how to do that, check [this guide](https://www.computerhope.com/issues/ch000549.htm)). 
+## Arduino Code
 
-> **NOTE:** If you installed the Windows App version of Arduino IDE, it is probably in a hidden folder under `C:/Program Files/WindowsApps/ArduinoLLC...`. 
+The generated Arduino code is designed for ESP32 and includes:
+- Pin definitions for lights
+- MP3 player control (DFPlayer Mini)
+- Marker-based timing logic
+- Non-blocking light control using `millis()`
 
-Once your environment variable is good to go, you can open the IDE directly by pressing the `Send Code to Arduino` button. You can upload code directly to a connected Arduino device by clicking the `Upload Code Directly` button.
+### MP3 Player Configuration
 
+By default, the code uses:
+- RX Pin: 16
+- TX Pin: 17
 
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+You can change these in the application via "Settings" → "MP3 Player Configuration..."
+
+## License
+
+This project is provided as-is for personal use.
+
+## Troubleshooting
+
+### WAV files not parsing
+- Ensure your WAV files contain CUE point markers
+- Check that the file is a valid WAV format (RIFF WAVE)
+
+### MP3 player not detected
+- Ensure the MP3 player is connected and mounted as a drive
+- Click "Refresh" in the MP3 transfer panel
+- Verify the drive letter is correct
+
+### Arduino code generation fails
+- Ensure at least one routine is configured
+- Check that routines have valid WAV files and light configurations
+
