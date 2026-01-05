@@ -6,55 +6,16 @@ from pathlib import Path
 from typing import Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QMenuBar, QStatusBar, QFileDialog, QMessageBox, QDialog, QFormLayout,
-    QSpinBox, QDialogButtonBox, QDockWidget
+    QMenuBar, QStatusBar, QFileDialog, QMessageBox, QDockWidget
 )
 from PyQt6.QtCore import Qt
 
 from src.gui.file_manager import FileManagerWidget
 from src.gui.routine_editor import RoutineEditorWidget
-from src.gui.mp3_transfer import MP3TransferWidget
+from src.gui.settings_widget import SettingsWidget
 from src.gui.console_widget import ConsoleWidget
 from src.core.routine_manager import RoutineManager, create_default_light_config
 from src.core.code_generator import CodeGenerator
-
-
-class MP3ConfigDialog(QDialog):
-    """Dialog for MP3 player configuration."""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.mp3_rx_pin = 16
-        self.mp3_tx_pin = 17
-        self.init_ui()
-    
-    def init_ui(self):
-        """Initialize the UI."""
-        self.setWindowTitle("MP3 Player Configuration")
-        layout = QFormLayout()
-        
-        self.rx_spin = QSpinBox()
-        self.rx_spin.setRange(0, 39)
-        self.rx_spin.setValue(self.mp3_rx_pin)
-        layout.addRow("RX Pin:", self.rx_spin)
-        
-        self.tx_spin = QSpinBox()
-        self.tx_spin.setRange(0, 39)
-        self.tx_spin.setValue(self.mp3_tx_pin)
-        layout.addRow("TX Pin:", self.tx_spin)
-        
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
-        
-        self.setLayout(layout)
-    
-    def get_pins(self):
-        """Get configured pins."""
-        return self.rx_spin.value(), self.tx_spin.value()
 
 
 class MainWindow(QMainWindow):
@@ -98,13 +59,12 @@ class MainWindow(QMainWindow):
         self.routine_editor.file_selection_changed.connect(self._on_routine_editor_file_selected)
         splitter.addWidget(self.routine_editor)
         
-        # Right panel: MP3 Transfer
-        self.mp3_transfer = MP3TransferWidget()
-        self.mp3_transfer.set_routine_manager(self.routine_manager)
-        splitter.addWidget(self.mp3_transfer)
+        # Right panel: Settings
+        self.settings_widget = SettingsWidget()
+        splitter.addWidget(self.settings_widget)
         
-        # Set splitter sizes (1:2:1 ratio)
-        splitter.setSizes([300, 600, 300])
+        # Set splitter sizes (slightly narrower file manager, wider settings)
+        splitter.setSizes([250, 600, 350])
         main_layout.addWidget(splitter)
         
         # Create menu bar
@@ -146,11 +106,7 @@ class MainWindow(QMainWindow):
         
         # Routine menu (removed - routines are now automatically tied to WAV files)
         
-        # Settings menu
-        settings_menu = menubar.addMenu("Settings")
-        
-        mp3_config_action = settings_menu.addAction("MP3 Player Configuration...")
-        mp3_config_action.triggered.connect(self._on_mp3_config)
+        # Settings menu (removed - settings are now in the right panel)
         
         # View menu
         view_menu = menubar.addMenu("View")
@@ -176,6 +132,12 @@ class MainWindow(QMainWindow):
         self.console_dock.topLevelChanged.connect(self._on_console_floating_changed)
         
         # Stream redirection is automatically installed when ConsoleWidget is initialized
+    
+    def showEvent(self, event):
+        """Handle window show event to set initial dock sizes."""
+        super().showEvent(event)
+        # Set initial height of the console dock (smaller default)
+        self.resizeDocks([self.console_dock], [150], Qt.Orientation.Vertical)
     
     def _on_file_added(self, file_data: dict):
         """Handle file added event - automatically create routine for the file."""
@@ -397,13 +359,6 @@ class MainWindow(QMainWindow):
                     QMessageBox.critical(self, "Error", "Failed to generate code")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to export code:\n{str(e)}")
-    
-    def _on_mp3_config(self):
-        """Open MP3 player configuration dialog."""
-        dialog = MP3ConfigDialog(self)
-        if dialog.exec():
-            self.mp3_rx_pin, self.mp3_tx_pin = dialog.get_pins()
-            self.status_bar.showMessage(f"MP3 pins configured: RX={self.mp3_rx_pin}, TX={self.mp3_tx_pin}")
     
     def _on_toggle_console(self, checked: bool):
         """Toggle console dock visibility."""
